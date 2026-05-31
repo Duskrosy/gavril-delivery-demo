@@ -47,6 +47,11 @@ wss.on('connection', (ws) => {
       if (m.t === 'state') {
         p.x = +m.x || 0; p.z = +m.z || 0; p.yaw = +m.yaw || 0;
         p.riding = !!m.riding; p.carrying = m.carrying || 'none';
+      } else if (m.t === 'chat') {
+        const text = String(m.text || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (!text) return;
+        const out = JSON.stringify({ t: 'chat', id: p.id, name: p.name, text });
+        for (const other of players.keys()) if (other !== ws && other.readyState === 1) other.send(out);
       }
     } catch { /* ignore bad frames */ }
   });

@@ -146,6 +146,17 @@ kbd{
 .carry-chip.damaged{ background:var(--reward); }
 .carry-chip.destroyed{ background:var(--decision); color:var(--ink); }
 
+/* chat input */
+.chat-input{
+  position:fixed; left:50%; bottom:96px; transform:translateX(-50%); z-index:45;
+  width:min(440px, 86vw); font-family:var(--sans); font-size:15px; color:var(--ink);
+  background:color-mix(in oklab, var(--panel) 92%, transparent); border:1px solid color-mix(in oklab,var(--action) 55%, var(--line-2));
+  border-radius:12px; padding:11px 16px; outline:none;
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  box-shadow:0 12px 36px -12px rgba(0,0,0,.7);
+}
+.chat-input::placeholder{ color:var(--ink-faint); }
+
 /* touch controls (mobile/tablet) */
 .touch{ position:fixed; inset:0; z-index:30; pointer-events:none; }
 .touch > *{ pointer-events:auto; }

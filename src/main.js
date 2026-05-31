@@ -26,7 +26,7 @@ import { Traffic } from './traffic.js';
 import { DayNight } from './daynight.js';
 import { OrbitCam } from './camera.js';
 import { Net } from './net.js';
-import { RemotePlayers } from './remote.js';
+import { RemotePlayers, makeChatSprite } from './remote.js';
 import { HUD } from './ui.js';
 
 const joinedOrders = ORDERS.map(o => ({ ...o, customer: customerById(o.customerId) }));
@@ -73,8 +73,10 @@ const remotePlayers = new RemotePlayers(scene);
 net.connect(
   (w) => { hud.setMultiplayer(w.name, net.online); hud.toast(`Online · you're ${w.name}`); },
   (reason) => hud.soloToast(reason),
+  (m) => remotePlayers.say(m.id, m.text),  // a remote player said something
 );
 let netT = 0, mpStatusT = 0;
+let localBubble = null, localBubbleTTL = 0;  // own speech bubble
 
 let assets = {};
 let handoffOpen = false;
@@ -90,6 +92,8 @@ let lockMode = false;     // Ctrl shift-lock (pointer locked)
 let pointerLocked = false;
 let camLastRiding = false;
 const mobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
+const chatInput = document.getElementById('chat-input');
+let chatActive = false;
 
 // --- input ------------------------------------------------------------------
 const input = { forward: false, back: false, left: false, right: false };
@@ -98,6 +102,8 @@ const KEYMAP = {
   KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
 };
 addEventListener('keydown', (e) => {
+  if (chatActive) return;
+  if (e.code === 'Enter' && started) { openChat(); e.preventDefault(); return; }
   if (KEYMAP[e.code]) { input[KEYMAP[e.code]] = true; e.preventDefault(); }
   if (e.code === 'KeyF') tryMount();
   if (e.code === 'KeyE') tryAction();
@@ -113,6 +119,7 @@ addEventListener('mousemove', (e) => {
 });
 canvas.addEventListener('wheel', (e) => { followCam.zoom(Math.sign(e.deltaY) * CAMERA.zoomStep); e.preventDefault(); }, { passive: false });
 addEventListener('keydown', (e) => {
+  if (chatActive) return;
   if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !e.repeat) {
     lockMode = !lockMode;
     try { if (lockMode) canvas.requestPointerLock?.(); else document.exitPointerLock?.(); } catch {}
@@ -148,6 +155,7 @@ if (mobile) {
   const bind = (id, fn) => document.getElementById(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
   bind('btn-ride', tryMount);
   bind('btn-act', tryAction);
+  bind('btn-chat', openChat);
 
   // camera orbit: one-finger drag on the canvas (empty area)
   let camId = null, ltx = 0, lty = 0;
@@ -165,6 +173,39 @@ const nearClockIn = (body) => dist2(body.position, world.clockInPos) < TUNING.cl
 const nearEat = (body) => dist2(body.position, world.restaurantPos) < TUNING.eatRadius
   || world.foodStands.some(s => dist2(body.position, s.position3) < TUNING.eatRadius);
 const onGasPad = (body) => world.gasStations.some(s => dist2(body.position, s.position3) < TUNING.refuelRadius);
+
+// --- chat (short-lived speech bubbles) -------------------------------------
+function openChat() {
+  if (!started) return;
+  chatActive = true;
+  chatInput.classList.remove('hidden');
+  chatInput.focus();
+}
+function closeChat() {
+  chatActive = false;
+  chatInput.value = '';
+  chatInput.blur();
+  chatInput.classList.add('hidden');
+}
+function sendChat() {
+  const text = chatInput.value.replace(/\s+/g, ' ').trim().slice(0, 80);
+  closeChat();
+  if (!text) return;
+  saySelf(text);   // own bubble locally (works offline too)
+  net.say(text);   // and to everyone else
+}
+function saySelf(text) {
+  if (localBubble) scene.remove(localBubble);
+  localBubble = makeChatSprite(text);
+  scene.add(localBubble);
+  localBubbleTTL = 6;
+}
+chatInput.addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.code === 'Enter') sendChat();
+  else if (e.code === 'Escape') closeChat();
+});
+chatInput.addEventListener('blur', () => { if (chatActive) closeChat(); });
 
 // --- order / shift ----------------------------------------------------------
 function presentOrder() {
@@ -442,6 +483,14 @@ function tick() {
   updateCarryVisual();
   updateWaypoint();
 
+  // own chat bubble floats above you and fades out
+  if (localBubble) {
+    localBubble.position.set(body.position.x, body.position.y + 6.2, body.position.z);
+    localBubbleTTL -= dt;
+    if (localBubbleTTL <= 0) { scene.remove(localBubble); localBubble = null; }
+    else localBubble.material.opacity = Math.min(1, localBubbleTTL);
+  }
+
   // multiplayer: throttled state send + interpolate remote players
   if (net.url) {
     netT += dt;
@@ -481,7 +530,8 @@ hud.onStart(() => {
 
 if (new URLSearchParams(location.search).get('dev')) {
   window.__demo = { game, avatar, bike, mount, needs, traffic, dayNight, world, hud, camera, orbitCam: followCam,
-    net, remotePlayers, STATES, FOOD, TUNING, setFreeze: (v) => { freezeCam = v; }, setLock: (v) => { lockMode = v; }, get input() { return input; } };
+    net, remotePlayers, STATES, FOOD, TUNING, setFreeze: (v) => { freezeCam = v; }, setLock: (v) => { lockMode = v; },
+    get input() { return input; }, get localBubble() { return localBubble; } };
 }
 
 boot();

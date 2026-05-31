@@ -26,8 +26,10 @@ You start **on foot** as a blocky avatar, off-shift. You can run deliveries on f
   turns to face the camera and moves camera-relative (Roblox-style) · **wheel** — zoom
 - **Ctrl** — toggle shift-lock (same camera-relative movement, hands-free)
 - **F** — walk up to the parked motorcycle and press F to ride; F again to hop off
+- **Enter** — chat: type a short message; it pops as a fading **speech bubble** above
+  your character (and everyone else's, in multiplayer). Esc cancels.
 - **Mobile / tablet**: on-screen **joystick** (move), **drag** anywhere to look,
-  **RIDE** and **ACT** buttons. Auto-detected.
+  **RIDE**, **ACT**, and **💬** buttons. Auto-detected.
 - **E** — **clock in** at the restaurant (no orders arrive until you do), accept an
   offered order, or eat when standing by the restaurant / a food stand
 - Follow the **cyan marker** to the hub, the restaurant, then the customer's door.

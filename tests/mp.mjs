@@ -60,6 +60,16 @@ async function run() {
   R.remoteHasColor = await p1.evaluate(() => { const r = window.__demo.net.remotes()[0]; return !!(r && r.color && r.name); });
   await p1.screenshot({ path: path.join(__dirname, 'mp-view.png') });
 
+  // chat: p1 says something → own bubble locally, and p2 sees a bubble on p1
+  await p2.bringToFront(); await wait(1100); // p2 ticks → builds p1's remote mesh
+  await p1.evaluate(() => { const ci = document.getElementById('chat-input'); ci.value = 'hi there!'; ci.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', bubbles: true })); });
+  await wait(700);
+  R.p1ownBubble = await p1.evaluate(() => !!window.__demo.localBubble);
+  R.p2SeesBubble = await p2.evaluate(() => [...window.__demo.remotePlayers.map.values()].some(e => !!e.bubble));
+  await p2.evaluate(() => { const r = [...window.__demo.remotePlayers.map.values()][0]; if (r) window.__demo.camera.position.set(r.group.position.x + 14, 10, r.group.position.z + 14), window.__demo.camera.lookAt(r.group.position); window.__demo.setFreeze(true); });
+  await wait(200);
+  await p2.screenshot({ path: path.join(__dirname, 'mp-chat.png') });
+
   await browser.close();
   await new Promise(r => fileSrv.close(r));
   mp.kill();
@@ -69,7 +79,7 @@ async function run() {
   console.log('page errors'.padEnd(16), ':', errors.length ? errors : 'none');
   const ok = R.p1connected === true && !!R.p1name && !!R.p2name && R.p1name !== R.p2name &&
     R.p1online === 2 && R.p1remotes === 1 && R.p2remotes === 1 && R.p1meshes === 1 &&
-    R.remoteHasColor === true && errors.length === 0;
+    R.remoteHasColor === true && R.p1ownBubble === true && R.p2SeesBubble === true && errors.length === 0;
   console.log('ALL CHECKS PASS'.padEnd(16), ':', ok);
   if (!ok) process.exit(1);
 }

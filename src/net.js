@@ -20,8 +20,9 @@ export class Net {
   // onWelcome(welcome) fires once we've joined; onFail(reason) fires once if
   // we can't (no URL, error, closed early, or timeout) → caller falls back to
   // single-player. Non-blocking: the game stays playable while we try.
-  connect(onWelcome, onFail) {
+  connect(onWelcome, onFail, onChat) {
     this._onWelcome = onWelcome;
+    this._onChat = onChat;
     this.joined = false;
     let failed = false;
     const fail = (reason) => { if (!failed && !this.joined) { failed = true; onFail?.(reason); } };
@@ -48,6 +49,8 @@ export class Net {
         this._onWelcome?.(m);
       } else if (m.t === 'players') {
         this._snapshot = m.players || [];
+      } else if (m.t === 'chat') {
+        this._onChat?.(m);
       }
     };
     ws.onclose = () => { this.connected = false; clearTimeout(timer); fail('server unavailable'); };
@@ -57,6 +60,12 @@ export class Net {
   send(state) {
     if (this.connected && this.ws && this.ws.readyState === 1) {
       this.ws.send(JSON.stringify({ t: 'state', ...state }));
+    }
+  }
+
+  say(text) {
+    if (this.connected && this.ws && this.ws.readyState === 1) {
+      this.ws.send(JSON.stringify({ t: 'chat', text }));
     }
   }
 

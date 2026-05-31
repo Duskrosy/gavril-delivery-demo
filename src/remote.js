@@ -30,6 +30,29 @@ function makeNameSprite(name, colorHex) {
   return spr;
 }
 
+// A short-lived speech bubble sprite (Roblox-style). Caller fades + removes it.
+export function makeChatSprite(text) {
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 128;
+  const ctx = cv.getContext('2d');
+  ctx.font = '600 34px "Hanken Grotesk", system-ui, sans-serif';
+  const w = Math.min(496, ctx.measureText(text).width + 40);
+  const x = (512 - w) / 2;
+  ctx.fillStyle = 'rgba(236,232,246,0.96)';
+  ctx.beginPath(); ctx.roundRect(x, 8, w, 70, 18); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(256 - 12, 76); ctx.lineTo(256 + 12, 76); ctx.lineTo(256, 98); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#1a1326'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 256, 44);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(9.2, 2.3, 1);
+  spr.position.y = 7.4;
+  spr.renderOrder = 1000;
+  return spr;
+}
+
 function makeRemoteMesh(colorHex, name) {
   const g = new THREE.Group();
   const shirt = new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .7, emissive: C(colorHex), emissiveIntensity: .12 });
@@ -65,6 +88,16 @@ function makeRemoteMesh(colorHex, name) {
 export class RemotePlayers {
   constructor(scene) { this.scene = scene; this.map = new Map(); }
 
+  // show a chat bubble above a remote player (if we know them)
+  say(id, text) {
+    const e = this.map.get(id);
+    if (!e) return;
+    if (e.bubble) e.group.remove(e.bubble);
+    e.bubble = makeChatSprite(text);
+    e.bubbleTTL = 6;
+    e.group.add(e.bubble);
+  }
+
   sync(remotes, dt) {
     const seen = new Set();
     for (const r of remotes) {
@@ -89,6 +122,11 @@ export class RemotePlayers {
       e.group.position.lerp(e.target, k);
       let d = e.targetYaw - e.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
       e.yaw += d * k; e.group.rotation.y = e.yaw;
+      if (e.bubble) {
+        e.bubbleTTL -= dt;
+        if (e.bubbleTTL <= 0) { e.group.remove(e.bubble); e.bubble = null; }
+        else e.bubble.material.opacity = Math.min(1, e.bubbleTTL); // fade out the last second
+      }
     }
   }
 

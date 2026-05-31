@@ -96,7 +96,7 @@ export class Avatar {
     const T = TUNING;
     const top = T.footSpeed * (opts.speedMult ?? 1);
     const fwd = { x: Math.sin(camYaw), z: Math.cos(camYaw) };
-    const rgt = { x: Math.cos(camYaw), z: -Math.sin(camYaw) };
+    const rgt = { x: -Math.cos(camYaw), z: Math.sin(camYaw) }; // camera-right (fixes inverted strafe)
     let mx = 0, mz = 0;
     if (input.forward) { mx += fwd.x; mz += fwd.z; }
     if (input.back) { mx -= fwd.x; mz -= fwd.z; }

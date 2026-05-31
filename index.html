@@ -81,10 +81,15 @@
     <div id="toast" class="toast"></div>
   </div>
 
+  <!-- chat (Enter to open; sends a fading speech bubble) -->
+  <input id="chat-input" class="chat-input hidden" maxlength="80" autocomplete="off"
+         placeholder="say something… (Enter to send, Esc to cancel)">
+
   <!-- ===================== TOUCH CONTROLS (mobile/tablet) ===================== -->
   <div id="touch" class="touch hidden">
     <div id="stick" class="stick"><div id="knob" class="knob"></div></div>
     <div class="touch-btns">
+      <button id="btn-chat" class="tbtn">💬</button>
       <button id="btn-ride" class="tbtn">RIDE</button>
       <button id="btn-act" class="tbtn act">ACT</button>
     </div>
