@@ -58,31 +58,35 @@ function makeRemoteMesh(colorHex, name) {
   const shirt = new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .7, emissive: C(colorHex), emissiveIntensity: .12 });
   const skin = new THREE.MeshStandardMaterial({ color: C('#d7b0ec'), roughness: .8 });
   const dark = new THREE.MeshStandardMaterial({ color: C('#2a2440'), roughness: .8 });
+  const tire = new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .95 });
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.7, 0.8), shirt);
-  torso.position.y = 3.0; torso.castShadow = true; g.add(torso);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.1, 1.05), skin);
-  head.position.y = 4.45; head.castShadow = true; g.add(head);
-  for (const x of [-0.42, 0.42]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.7, 0.6), dark);
-    leg.position.set(x, 1.55, 0); g.add(leg);
-  }
-  // cargo box (shown when carrying)
+  // --- on-foot figure ---
+  const walk = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.7, 0.8), shirt); torso.position.y = 3.0; torso.castShadow = true; walk.add(torso);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.1, 1.05), skin); head.position.y = 4.45; head.castShadow = true; walk.add(head);
+  for (const x of [-0.42, 0.42]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.7, 0.6), dark); leg.position.set(x, 1.55, 0); walk.add(leg); }
+  g.add(walk);
+
+  // --- motorcycle + seated rider (shown when riding) ---
+  const bike = new THREE.Group();
+  const tank = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.85, 2.4), shirt); tank.position.set(0, 1.35, 0.1); tank.castShadow = true; bike.add(tank);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.34, 1.3), dark); seat.position.set(0, 1.55, -0.85); bike.add(seat);
+  const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.8, 8), dark); fork.position.set(0, 1.4, 1.5); fork.rotation.x = -0.35; bike.add(fork);
+  const hbar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 8), dark); hbar.position.set(0, 2.1, 1.25); hbar.rotation.z = Math.PI / 2; bike.add(hbar);
+  const hl = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), new THREE.MeshStandardMaterial({ color: C('#fff0c8'), emissive: C('#fff0c8'), emissiveIntensity: 1.4 })); hl.position.set(0, 1.7, 2.0); bike.add(hl);
+  for (const z of [1.85, -1.55]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.34, 16), tire); w.rotation.z = Math.PI / 2; w.position.set(0, 0.85, z); w.castShadow = true; bike.add(w); }
+  const rtorso = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.4, 0.8), shirt); rtorso.position.set(0, 2.4, -0.3); rtorso.rotation.x = 0.2; rtorso.castShadow = true; bike.add(rtorso);
+  const rhead = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), skin); rhead.position.set(0, 3.3, -0.1); bike.add(rhead);
+  bike.visible = false; g.add(bike);
+
+  // cargo box (shown when carrying) — sits on the back of whichever is active
   const box = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0),
     new THREE.MeshStandardMaterial({ color: C('#1c1429'), emissive: C('#ffc864'), emissiveIntensity: .5, roughness: .5 }));
-  box.position.set(0, 3.1, 0.95); box.visible = false; g.add(box);
-
-  // simple scooter (shown when riding)
-  const scooter = new THREE.Group();
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.22, 2.0), shirt); deck.position.y = 0.55; scooter.add(deck);
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), dark); bar.position.set(0, 1.6, 0.85); bar.rotation.z = Math.PI / 2; scooter.add(bar);
-  const tire = new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .95 });
-  for (const z of [0.9, -0.85]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.22, 12), tire); w.rotation.z = Math.PI / 2; w.position.set(0, 0.5, z); scooter.add(w); }
-  scooter.visible = false; g.add(scooter);
+  box.position.set(0, 2.7, -1.1); box.visible = false; g.add(box);
 
   g.add(makeNameSprite(name, colorHex));
   g.scale.setScalar(0.62);
-  return { group: g, box, scooter };
+  return { group: g, box, walk, bike };
 }
 
 export class RemotePlayers {
@@ -113,7 +117,8 @@ export class RemotePlayers {
       }
       e.target.set(r.x, 0, r.z);
       e.targetYaw = r.yaw || 0;
-      e.scooter.visible = !!r.riding;
+      e.walk.visible = !r.riding;
+      e.bike.visible = !!r.riding;
       e.box.visible = r.carrying && r.carrying !== 'none';
     }
     const k = Math.min(1, dt * 9);

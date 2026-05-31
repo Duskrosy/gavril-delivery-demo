@@ -71,6 +71,11 @@ async function run(){
     bike.mesh.position.set(a.x,0,a.z); await new Promise(r=>setTimeout(r,200));
     return Math.hypot(bike.position.x-a.x, bike.position.z-a.z) > 1; });
 
+  // eat OFF-SHIFT at a food stand
+  await page.evaluate(()=>{ const {needs,world,bike}=window.__demo; needs.setHunger(20); const s=world.foodStands[0].position3; bike.mesh.position.set(s.x,0,s.z); });
+  await wait(150); await page.keyboard.press('e'); await wait(150);
+  R.offShiftEat = await page.evaluate(()=>window.__demo.needs.hunger);
+
   // clock in at the hub
   await tp(page,'hub'); await wait(200);
   await page.keyboard.press('e'); await wait(250);
@@ -139,8 +144,9 @@ async function run(){
   for(const [k,v] of Object.entries(R)) console.log(k.padEnd(20),':',v);
   console.log('page errors'.padEnd(20),':', errors.length?errors:'none');
   const ok = R.startMode==='ON FOOT' && R.startOffShift==='OFF_SHIFT' && R.riding===true &&
-    R.canPushEmpty===true && R.pushVisual===true && R.carCount===36 && R.lightAxis==='string' &&
-    R.vehicleKinds.includes('moto') && R.vehicleKinds.length>=4 && R.lightCount===6 && R.carsMoving>=24 &&
+    R.canPushEmpty===true && R.pushVisual===true && R.carCount===26 && R.lightAxis==='string' &&
+    R.vehicleKinds.includes('moto') && R.vehicleKinds.length>=4 && R.lightCount===6 && R.carsMoving>=18 &&
+    R.offShiftEat>95 &&
     R.orbitCam===true && R.aggrCount>=1 && R.haterCount>=1 && R.agentCount>=38 && R.pedPush===true &&
     R.clockedIn===true && R.stateAfterClockIn==='OFFER' && R.carryingAfterPickup==='fresh' &&
     R.foodAfterCrash==='destroyed' && R.foodAfterRemake==='fresh' && R.gasRose===true &&

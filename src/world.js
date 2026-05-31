@@ -538,6 +538,7 @@ export function buildWorld(scene) {
     ...GAS_STATIONS.map(s => ({ x: s.position.x, z: s.position.z, r: 13 })),
     ...FOOD_STANDS.map(s => ({ x: s.position.x, z: s.position.z, r: 9 })),
     ...POIS.map(p => ({ x: p.position.x, z: p.position.z, r: 13 })),
+    ...TRAFFIC_LIGHTS.map(l => ({ x: l.position.x - 8, z: l.position.z - 8, r: 6 })),
     { x: SPAWN.foot.x, z: SPAWN.foot.z, r: 8 },
     { x: SPAWN.bike.x, z: SPAWN.bike.z, r: 8 },
   ];
@@ -633,11 +634,12 @@ export function buildWorld(scene) {
     return { ...st, object: obj, position3: new THREE.Vector3(st.position.x, 0, st.position.z) };
   });
 
-  // traffic lights (one pole per controlled intersection)
+  // traffic lights — pole sits on the block CORNER (off the road); the arm
+  // reaches out over the intersection.
   const trafficLights = TRAFFIC_LIGHTS.map(l => {
     const tl = makeTrafficLight();
-    tl.group.position.set(l.position.x - 4, 0, l.position.z);
-    tl.group.rotation.y = -Math.PI / 2; // arm reaches over the road
+    tl.group.position.set(l.position.x - 8, 0, l.position.z - 8);
+    tl.group.rotation.y = Math.PI / 4; // arm points toward the intersection
     scene.add(tl.group);
     return { redMat: tl.redMat, yellowMat: tl.yellowMat, greenMat: tl.greenMat, position: l.position };
   });

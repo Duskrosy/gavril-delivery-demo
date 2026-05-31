@@ -232,9 +232,15 @@ function clockIn() {
 function tryAction() {
   if (!started) return;
   const body = mount.body;
-  if (game.state === STATES.OFF_SHIFT) { if (nearClockIn(body)) clockIn(); return; }
+  const hungry = needs.hunger < TUNING.hungerMax - 1;
+  const atStand = world.foodStands.some(s => dist2(body.position, s.position3) < TUNING.eatRadius);
+  if (game.state === STATES.OFF_SHIFT) {
+    if (nearClockIn(body)) { clockIn(); return; }
+    if (atStand && hungry) { needs.eat(); hud.toast('Fed — back to full'); }  // eat off-shift at a stand
+    return;
+  }
   if (game.state === STATES.OFFER) { tryAccept(); return; }
-  if (nearEat(body) && needs.hunger < TUNING.hungerMax - 1) { needs.eat(); hud.toast('Fed — back to full'); }
+  if (nearEat(body) && hungry) { needs.eat(); hud.toast('Fed — back to full'); }
 }
 
 function tryMount() {
@@ -522,6 +528,10 @@ async function boot() {
 
 hud.onStart(() => {
   started = true;
+  // mobile: best-effort fullscreen + landscape lock (a portrait overlay nudges otherwise)
+  if (mobile) {
+    try { document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape')).catch(() => {}); } catch { /* ignore */ }
+  }
   hud.beginPlay();
   hud.setMode(false);
   hud.setStats({ cash: 0, avgRating: 5, served: 0, total: game.ordersPerShift, clock: dayNight.phase });

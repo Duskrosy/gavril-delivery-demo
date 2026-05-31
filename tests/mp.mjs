@@ -66,6 +66,13 @@ async function run() {
   await wait(700);
   R.p1ownBubble = await p1.evaluate(() => !!window.__demo.localBubble);
   R.p2SeesBubble = await p2.evaluate(() => [...window.__demo.remotePlayers.map.values()].some(e => !!e.bubble));
+
+  // when p1 rides, p2 should render a motorcycle (bike group visible, not walk).
+  // send directly (p1 is a background tab, so its rAF send loop is throttled).
+  await p1.evaluate(() => { const d = window.__demo; d.mount.mount();
+    d.net.send({ x: d.bike.position.x, z: d.bike.position.z, yaw: d.bike.yaw, riding: true, carrying: 'none' }); });
+  await wait(700);
+  R.p2SeesBike = await p2.evaluate(() => [...window.__demo.remotePlayers.map.values()].some(e => e.bike && e.bike.visible && !e.walk.visible));
   await p2.evaluate(() => { const r = [...window.__demo.remotePlayers.map.values()][0]; if (r) window.__demo.camera.position.set(r.group.position.x + 14, 10, r.group.position.z + 14), window.__demo.camera.lookAt(r.group.position); window.__demo.setFreeze(true); });
   await wait(200);
   await p2.screenshot({ path: path.join(__dirname, 'mp-chat.png') });
@@ -79,7 +86,7 @@ async function run() {
   console.log('page errors'.padEnd(16), ':', errors.length ? errors : 'none');
   const ok = R.p1connected === true && !!R.p1name && !!R.p2name && R.p1name !== R.p2name &&
     R.p1online === 2 && R.p1remotes === 1 && R.p2remotes === 1 && R.p1meshes === 1 &&
-    R.remoteHasColor === true && R.p1ownBubble === true && R.p2SeesBubble === true && errors.length === 0;
+    R.remoteHasColor === true && R.p1ownBubble === true && R.p2SeesBubble === true && R.p2SeesBike === true && errors.length === 0;
   console.log('ALL CHECKS PASS'.padEnd(16), ':', ok);
   if (!ok) process.exit(1);
 }

@@ -98,14 +98,15 @@ export const TUNING = {
   bumpBand:      2.4,    // perpendicular detection half-width
   bumpCooldown:  0.7,
 
-  // traffic
-  carCount:      36,
+  // traffic (calmer: fewer cars, mostly go straight)
+  carCount:      26,
   carSpeed:      10,
   carAccel:      9,      // m/s² toward target speed
   carBrake:      22,     // m/s² when yielding
   carLookAhead:  11,     // how far ahead a car watches for obstacles
   carYieldDist:  4.5,    // brake if an obstacle is within this of the look point
-  carTurnChance: 0.45,   // probability of turning (vs. straight) at an intersection
+  carTurnChance: 0.16,   // mostly drive straight; only occasionally turn
+  carHitboxScale: 0.82,  // collision box vs. the visible model
   intersectionRadius: 6, // give-way box at uncontrolled junctions
   approachDist:  10,     // how close to a junction a car starts watching it
   lightCycle:    { green: 6.5, yellow: 1.8, red: 6.5 }, // per phase, per axis

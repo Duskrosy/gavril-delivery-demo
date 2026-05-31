@@ -115,10 +115,10 @@ function makeMoto(colorHex) {
 
 // vehicle types: footprint + behaviour ranges. `weight` biases the mix.
 const VEHICLE_TYPES = [
-  { kind: 'car', make: makeCar, w: 2.0, l: 4.2, weight: 6, speed: [0.9, 1.2], turn: [0.35, 0.5], yield: 4.2, accel: [0.9, 1.3] },
-  { kind: 'van', make: makeVan, w: 2.3, l: 5.8, weight: 3, speed: [0.8, 1.0], turn: [0.25, 0.4], yield: 4.8, accel: [0.8, 1.0] },
-  { kind: 'bus', make: makeBus, w: 2.7, l: 8.6, weight: 2, speed: [0.6, 0.8], turn: [0.1, 0.2], yield: 5.6, accel: [0.6, 0.85] },
-  { kind: 'moto', make: makeMoto, w: 1.0, l: 2.2, weight: 4, speed: [1.0, 1.3], turn: [0.5, 0.7], yield: 3.2, accel: [1.0, 1.5] },
+  { kind: 'car', make: makeCar, w: 2.0, l: 4.2, weight: 6, speed: [0.9, 1.2], turn: [0.1, 0.2], yield: 4.2, accel: [0.9, 1.3] },
+  { kind: 'van', make: makeVan, w: 2.3, l: 5.8, weight: 3, speed: [0.8, 1.0], turn: [0.06, 0.14], yield: 4.8, accel: [0.8, 1.0] },
+  { kind: 'bus', make: makeBus, w: 2.7, l: 8.6, weight: 2, speed: [0.6, 0.8], turn: [0.04, 0.1], yield: 5.6, accel: [0.6, 0.85] },
+  { kind: 'moto', make: makeMoto, w: 1.0, l: 2.2, weight: 4, speed: [1.0, 1.3], turn: [0.18, 0.32], yield: 3.2, accel: [1.0, 1.5] },
 ];
 const BUS_COLORS = ['#ffc864', '#6fd2e6', '#ff8ec8'];
 function pickType(r) {
@@ -330,19 +330,22 @@ export class Traffic {
   }
 
   // Car footprints as AABBs for solid push-out (oriented to each car's axis).
+  // Slightly tighter than the model so you don't bounce off thin air.
   solidBoxes() {
+    const s = TUNING.carHitboxScale ?? 0.85;
     return this.cars.map(c => c.axis === 'z'
-      ? { x: c._wx, z: c._wz, hx: c.halfW, hz: c.halfL }
-      : { x: c._wx, z: c._wz, hx: c.halfL, hz: c.halfW });
+      ? { x: c._wx, z: c._wz, hx: c.halfW * s, hz: c.halfL * s }
+      : { x: c._wx, z: c._wz, hx: c.halfL * s, hz: c.halfW * s });
   }
 
   // Strongest car footprint overlapping the body circle (radius r). Overlap-
   // based, so call it BEFORE solid push-out. Returns { relSpeed, dir } or null.
   collide(body, r = 1.8) {
     let best = null, bestPen = 0;
+    const s = TUNING.carHitboxScale ?? 0.85;
     for (const car of this.cars) {
-      const hx = car.axis === 'z' ? car.halfW : car.halfL;
-      const hz = car.axis === 'z' ? car.halfL : car.halfW;
+      const hx = (car.axis === 'z' ? car.halfW : car.halfL) * s;
+      const hz = (car.axis === 'z' ? car.halfL : car.halfW) * s;
       const dx = body.position.x - car._wx;
       const dz = body.position.z - car._wz;
       const ox = (hx + r) - Math.abs(dx);
