@@ -66,11 +66,12 @@ export const TUNING = {
   // mounting
   mountRadius: 5.5,   // how close to the parked bike to ride
 
-  // gameplay
-  pickupRadius:  7,
-  handoffRadius: 7,
-  refuelRadius:  7,
-  eatRadius:     7,
+  // gameplay (radii are generous so reaching a building's edge counts as
+  // "arrived" — buildings are solid, so you stop ~hx+bodyRadius from centre)
+  pickupRadius:  11,
+  handoffRadius: 11,
+  refuelRadius:  9,
+  eatRadius:     11,
   ordersPerShift: 3,
 
   // needs — pace governors (never fail states)
@@ -91,60 +92,92 @@ export const TUNING = {
   knockback:     8,
 
   // speed bumps
-  bumpSlowMult:  0.45,   // speed retained when crossing a bump
-  bumpCooldown:  0.8,
+  bumpSlowMult:  0.4,    // speed retained when crossing a bump
+  bumpBounce:    0.55,   // camera vertical jolt
+  bumpBand:      2.6,    // perpendicular detection half-width
+  bumpCooldown:  0.7,
 
   // traffic
-  carCount:      7,
-  carSpeed:      11,
+  carCount:      16,
+  carSpeed:      12,
   lightCycle:    { green: 6, yellow: 1.6, red: 5 }, // seconds per phase
+
+  // clock-in / shift
+  clockInRadius: 12,
+
+  // day/night
+  dayCycleSeconds: 210,  // full Morning→…→Late-night→Morning loop
+  dayStart:        0.78, // begin at dusk/late-evening
 };
 
 // --- city props ------------------------------------------------------------
 // Gas stations: pull onto the pad to auto-refuel.
 export const GAS_STATIONS = [
-  { id: 'gas-a', position: { x: 24, z: -12 } },
-  { id: 'gas-b', position: { x: -24, z: 14 } },
+  { id: 'gas-a', position: { x: 60, z: -16 } },
+  { id: 'gas-b', position: { x: -60, z: 18 } },
+  { id: 'gas-c', position: { x: -16, z: -60 } },
 ];
 
-// Food stand: press E nearby to eat (free). The restaurant also feeds you.
-export const FOOD_STAND = { id: 'stand', position: { x: 13, z: 16 } };
+// Food stands: press E nearby to eat (free). The restaurant also feeds you.
+export const FOOD_STANDS = [
+  { id: 'stand-a', position: { x: 18, z: 32 } },
+  { id: 'stand-b', position: { x: -34, z: -34 } },
+];
 
 // One working traffic light governing the central N–S road (x ≈ 0).
-export const TRAFFIC_LIGHT = { position: { x: 0, z: -24 }, axis: 'z' };
+export const TRAFFIC_LIGHT = { position: { x: 0, z: -30 }, axis: 'z' };
 
-// Speed bumps: short humps spanning a road. axis = road travel direction.
+// Speed bumps: humps spanning a road. axis = road travel direction.
 export const SPEED_BUMPS = [
-  { position: { x: 0, z: 12 },  axis: 'z' },
-  { position: { x: -24, z: -10 }, axis: 'z' },
-  { position: { x: 20, z: 0 },  axis: 'x' },
+  { position: { x: 0,   z: 30 },  axis: 'z' },
+  { position: { x: 0,   z: -60 }, axis: 'z' },
+  { position: { x: 30,  z: 0 },   axis: 'x' },
+  { position: { x: -30, z: 0 },   axis: 'x' },
+  { position: { x: 60,  z: 30 },  axis: 'z' },
+  { position: { x: -60, z: -30 }, axis: 'z' },
 ];
 
 // Where the player spawns on foot and where the bike is parked at start.
-export const SPAWN = { foot: { x: 3, z: 30, yaw: Math.PI }, bike: { x: -3, z: 30, yaw: Math.PI } };
+export const SPAWN = { foot: { x: 8, z: 34, yaw: Math.PI }, bike: { x: -4, z: 34, yaw: Math.PI } };
 
 // --- World layout ----------------------------------------------------------
-// Compact night-city block. Roads run along X/Z. y is up.
-// The restaurant is the central hub; each house sits beside a landmark.
+// Roomy night-city blocks. Roads run along X/Z. y is up.
+// The restaurant is the central hub (also the clock-in point); each house
+// sits beside a distinctive landmark out toward the city's corners.
 export const WORLD = {
-  half: 70,          // ground extends [-half, half] on X and Z
-  blockSpacing: 24,  // road grid spacing
-  restaurant: { id: 'restaurant', position: { x: 0, z: 4 } },
+  half: 110,         // ground extends [-half, half] on X and Z
+  blockSpacing: 30,  // road grid spacing
+  roadWidth: 12,
+  restaurant: { id: 'restaurant', position: { x: 0, z: 8 } },
 };
 
 export const LANDMARKS = [
-  { id: 'clock',    label: 'the clock tower', position: { x: -46, z: -46 }, colorKey: 'system' },
-  { id: 'fountain', label: 'the fountain',    position: { x:  46, z: -46 }, colorKey: 'nav' },
-  { id: 'neon',     label: 'the big neon sign', position: { x:  46, z:  46 }, colorKey: 'decision' },
-  { id: 'park',     label: 'the little park',  position: { x: -46, z:  46 }, colorKey: 'reward' },
+  { id: 'clock',    label: 'the clock tower',  position: { x: -90, z: -90 }, colorKey: 'system' },
+  { id: 'fountain', label: 'the fountain',     position: { x:  90, z: -90 }, colorKey: 'nav' },
+  { id: 'neon',     label: 'the big neon sign', position: { x:  90, z:  90 }, colorKey: 'decision' },
+  { id: 'park',     label: 'the little park',  position: { x: -90, z:  90 }, colorKey: 'reward' },
 ];
 
-// Each house is anchored a few units "in front of" its landmark.
+// Each house is anchored along the road "in front of" its landmark.
 export const HOUSES = [
-  { id: 'house-1', landmarkId: 'clock',    position: { x: -46, z: -28 } },
-  { id: 'house-2', landmarkId: 'fountain', position: { x:  46, z: -28 } },
-  { id: 'house-3', landmarkId: 'neon',     position: { x:  46, z:  28 } },
-  { id: 'house-4', landmarkId: 'park',     position: { x: -46, z:  28 } },
+  { id: 'house-1', landmarkId: 'clock',    position: { x: -90, z: -58 } },
+  { id: 'house-2', landmarkId: 'fountain', position: { x:  90, z: -58 } },
+  { id: 'house-3', landmarkId: 'neon',     position: { x:  90, z:  58 } },
+  { id: 'house-4', landmarkId: 'park',     position: { x: -90, z:  58 } },
+];
+
+// --- Day/night keyframes ----------------------------------------------------
+// Lerped by the day cycle. t in [0,1). Colors are hex; intensities are scalars.
+// fogNear/Far in world units; bloom scales the post strength.
+export const DAYNIGHT = [
+  { t: 0.00, name: 'Morning',    sky: '#9fb3e8', fog: '#b9c4e6', fogNear: 70, fogFar: 320,
+    hemiSky: '#bcc6ee', hemiGround: '#5a5170', hemiInt: 1.15, keyColor: '#fff0d6', keyInt: 1.7, ambInt: 0.5, bloom: 0.35, sun: [60, 70, 40] },
+  { t: 0.30, name: 'Midday',     sky: '#aec4ef', fog: '#c6d2ee', fogNear: 90, fogFar: 360,
+    hemiSky: '#cdd8f3', hemiGround: '#62597a', hemiInt: 1.3, keyColor: '#ffffff', keyInt: 2.0, ambInt: 0.55, bloom: 0.28, sun: [10, 95, 20] },
+  { t: 0.55, name: 'Dinner rush', sky: '#e79a6a', fog: '#caa2a0', fogNear: 60, fogFar: 280,
+    hemiSky: '#f0b483', hemiGround: '#4a3a52', hemiInt: 1.0, keyColor: '#ffb061', keyInt: 1.6, ambInt: 0.4, bloom: 0.5, sun: [-50, 35, 30] },
+  { t: 0.78, name: 'Late-night', sky: '#0b0812', fog: '#0b0812', fogNear: 55, fogFar: 200,
+    hemiSky: '#6a5fa0', hemiGround: '#1a1428', hemiInt: 0.95, keyColor: '#b3a8e6', keyInt: 1.15, ambInt: 0.42, bloom: 0.7, sun: [-70, 60, -30] },
 ];
 
 export const CUSTOMERS = [

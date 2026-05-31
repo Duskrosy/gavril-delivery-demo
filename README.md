@@ -19,12 +19,17 @@ Or any static server (`npx serve`, etc.).
 
 ## Controls
 
-You start **on foot** as a blocky avatar. You can run deliveries on foot, or ride.
+You start **on foot** as a blocky avatar, off-shift. You can run deliveries on foot, or ride.
 
 - **W A S D / arrows** — move (walk on foot, drive on the bike)
 - **F** — walk up to the parked motorcycle and press F to ride; F again to hop off
-- **E** — accept an offered order, or eat when standing by the restaurant / food stand
-- Follow the **cyan marker** to the restaurant, then to the customer's door.
+- **E** — **clock in** at the restaurant (no orders arrive until you do), accept an
+  offered order, or eat when standing by the restaurant / a food stand
+- Follow the **cyan marker** to the hub, the restaurant, then the customer's door.
+
+**Optional shift:** orders only come once you clock in at the restaurant hub — wander the
+city freely first if you like. The world runs a continuous **day/night cycle** (Morning →
+Midday → Dinner → Late-night), shown in the HUD.
 
 ## Systems (pace governors — never fail states)
 
@@ -68,22 +73,26 @@ src/config.js   palette, tuning, world layout, orders, props (pure data)
 src/game.js     GameState — state machine + food state (pure logic, tested)
 src/rules.js    impact classification + food-state rules (pure, tested)
 src/needs.js    gas + hunger pace governors (pure, tested)
+src/rules.js    collision impact + food-state rules (pure, tested)
+src/collision.js circle-vs-AABB solid push-out (pure, tested)
 src/assets.js   image loader + vector placeholder fallback (tested)
-src/world.js    scene, lights, fog, city, landmarks, gas stations, props, pedestrians
+src/world.js    scene, city, landmarks, gas stations, food stands, light, bumps, pedestrians, solids
+src/daynight.js continuous time-of-day lighting cycle
 src/avatar.js   on-foot blocky Roblox-style character
 src/player.js   motorcycle + driving physics
 src/camera.js   shared smoothed follow camera (+ shake)
 src/mount.js    on-foot ⇄ bike mode controller
-src/traffic.js  looping cars, traffic light, collision
+src/traffic.js  looping cars, traffic light, car collision
 src/ui.js       HUD, meters, order card, vignette, payout, summary
 src/main.js     bootstrap, render loop, input, wiring
 
-tests/          node:test logic suites + headless puppeteer harnesses
+tests/          node:test logic suites + headless puppeteer harness
 ```
 
 ## Tests
 
 ```bash
-node --test                # 21 logic tests (state machine, food rules, needs, assets)
-node tests/phase2.mjs      # headless browser: mount, crash→remake, refuel, eat, full shift
+node --test                # 26 logic tests (state machine, food rules, needs, collision, assets)
+node tests/phase2.mjs      # headless browser: mount, clock-in, crash→remake, refuel, eat,
+                           #   solid collision, day/night, full shift to summary
 ```

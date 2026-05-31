@@ -1,6 +1,6 @@
-// Phase-2 headless verification: on-foot start, mount/dismount, pickup,
-// forced crash -> food destroyed -> remake, refuel, eat, and a full 3-order
-// shift to the summary. Captures screenshots and asserts no page errors.
+// Headless integration test (phase 2 + 3): on-foot start, mount, clock-in
+// gating, pickup, forced crash -> destroyed -> remake, refuel, eat, solid
+// collision push-out, day/night phase change, and a full shift to summary.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,120 +12,100 @@ const ROOT = path.resolve(__dirname, '..');
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const MIME = { '.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml' };
 const wait = ms => new Promise(r => setTimeout(r, ms));
-
-const server = http.createServer((req,res)=>{
-  let p = decodeURIComponent(req.url.split('?')[0]); if(p==='/')p='/index.html';
-  fs.readFile(path.join(ROOT,p),(e,d)=>{ if(e){res.writeHead(404);res.end();return;}
-    res.writeHead(200,{'Content-Type':MIME[path.extname(p)]||'application/octet-stream'});res.end(d);});
-});
+const server = http.createServer((req,res)=>{ let p=decodeURIComponent(req.url.split('?')[0]); if(p==='/')p='/index.html';
+  fs.readFile(path.join(ROOT,p),(e,d)=>{ if(e){res.writeHead(404);res.end();return;} res.writeHead(200,{'Content-Type':MIME[path.extname(p)]||'application/octet-stream'});res.end(d);});});
 const shot = (page,name)=>page.screenshot({ path: path.join(__dirname, name) });
+const tp = (page, kind) => page.evaluate((k)=>{ const {bike,world}=window.__demo;
+  const t = k==='hub'?world.clockInPos : k==='rest'?world.restaurantPos : world.gasStations[0].position3;
+  bike.mesh.position.set(t.x,0,t.z); bike.speed=0; }, kind);
 
 async function run(){
-  await new Promise(r=>server.listen(0,r));
-  const port = server.address().port;
-  const browser = await puppeteer.launch({ executablePath:CHROME, headless:'new',
-    args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader'],
-    defaultViewport:{width:1280,height:800} });
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+  await new Promise(r=>server.listen(0,r)); const port=server.address().port;
+  const browser=await puppeteer.launch({executablePath:CHROME,headless:'new',args:['--no-sandbox','--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader'],defaultViewport:{width:1280,height:800}});
+  const page=await browser.newPage();
+  const errors=[]; page.on('pageerror',e=>errors.push('PAGEERROR: '+e.message));
+  await page.goto(`http://localhost:${port}/?dev=1`,{waitUntil:'load'});
+  await page.waitForSelector('#start-btn'); await page.waitForFunction(()=>!document.getElementById('start-btn').disabled).catch(()=>{});
+  await page.click('#start-btn'); await wait(400);
+  const R={};
+  R.startMode = await page.$eval('#mode-text',el=>el.textContent);
+  R.startOffShift = await page.evaluate(()=>window.__demo.game.state);
+  await shot(page,'p2-foot.png');
 
-  await page.goto(`http://localhost:${port}/?dev=1`, { waitUntil:'load' });
-  await page.waitForSelector('#start-btn');
-  await page.waitForFunction(()=>!document.getElementById('start-btn').disabled).catch(()=>{});
-  await page.click('#start-btn');
-  await wait(400);
+  // mount
+  await page.evaluate(()=>{ const {avatar,bike}=window.__demo; avatar.mesh.position.set(bike.position.x,0,bike.position.z); });
+  await page.keyboard.press('f'); await wait(250);
+  R.riding = await page.evaluate(()=>window.__demo.mount.isRiding);
 
-  const results = {};
-  results.startMode = await page.$eval('#mode-text', el => el.textContent);
-  await shot(page, 'p2-foot.png');
+  // clock in at the hub
+  await tp(page,'hub'); await wait(200);
+  await page.keyboard.press('e'); await wait(250);
+  R.clockedIn = await page.evaluate(()=>window.__demo.game.onShift);
+  R.stateAfterClockIn = await page.evaluate(()=>window.__demo.game.state);
 
-  // walk avatar to the bike, press F to ride
-  await page.evaluate(() => {
-    const { avatar, bike } = window.__demo;
-    avatar.mesh.position.set(bike.position.x, 0, bike.position.z);
-  });
-  await page.keyboard.press('f');
-  await wait(300);
-  results.riding = await page.evaluate(() => window.__demo.mount.isRiding);
-  results.modeAfterMount = await page.$eval('#mode-text', el => el.textContent);
-  await shot(page, 'p2-riding.png');
+  // accept + pickup
+  await page.evaluate(()=>document.getElementById('oc-accept').click()); await wait(150);
+  await tp(page,'rest'); await wait(300);
+  R.carryingAfterPickup = await page.evaluate(()=>window.__demo.game.foodState);
 
-  // accept + teleport to restaurant for pickup
-  await page.keyboard.press('e');
-  await wait(150);
-  await page.evaluate(() => { const {bike,world}=window.__demo; bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); });
-  await wait(300);
-  results.carryingAfterPickup = await page.evaluate(() => window.__demo.game.foodState);
-
-  // force a crash: drop the bike onto a car at high speed
-  await page.evaluate(() => {
-    const { bike, traffic } = window.__demo;
-    const car = traffic.cars[0];
-    bike.mesh.position.set(car._wx, 0, car._wz);
-    bike.speed = 26;
-    bike.headingVec.set(0, 0, car.dir > 0 ? -1 : 1); // head into the car
-  });
+  // forced crash
+  await page.evaluate(()=>{ const {bike,traffic}=window.__demo; const c=traffic.cars[0];
+    bike.mesh.position.set(c._wx,0,c._wz); bike.speed=26; bike.headingVec.set(0,0,c.dir>0?-1:1); });
   await wait(250);
-  results.foodAfterCrash = await page.evaluate(() => window.__demo.game.foodState);
-  results.needsRemake = await page.evaluate(() => window.__demo.game.needsRemake);
-  await shot(page, 'p2-crash.png');
+  R.foodAfterCrash = await page.evaluate(()=>window.__demo.game.foodState);
+  await shot(page,'p2-crash.png');
+  // remake
+  await tp(page,'rest'); await wait(300);
+  R.foodAfterRemake = await page.evaluate(()=>window.__demo.game.foodState);
 
-  // remake: back to restaurant
-  await page.evaluate(() => { const {bike,world}=window.__demo; bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); bike.speed=0; });
-  await wait(300);
-  results.foodAfterRemake = await page.evaluate(() => window.__demo.game.foodState);
+  // refuel
+  R.gasRose = await page.evaluate(async ()=>{ const {needs,world,bike}=window.__demo; needs.setGas(10); const b=needs.gas;
+    bike.mesh.position.set(world.gasStations[0].position3.x,0,world.gasStations[0].position3.z); await new Promise(r=>setTimeout(r,600)); return needs.gas>b; });
+  // eat
+  await page.evaluate(()=>{ const {needs,world,bike}=window.__demo; needs.setHunger(20); bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); });
+  await page.keyboard.press('e'); await wait(150);
+  R.hungerAfterEat = await page.evaluate(()=>window.__demo.needs.hunger);
 
-  // refuel check: drain gas, sit on a pad, confirm it rises
-  results.gasRose = await page.evaluate(async () => {
-    const { needs, world, bike, TUNING } = window.__demo;
-    needs.setGas(10);
-    const before = needs.gas;
-    bike.mesh.position.set(world.gasStations[0].position3.x, 0, world.gasStations[0].position3.z);
-    await new Promise(r => setTimeout(r, 600));
-    return needs.gas > before;
-  });
+  // solid collision: drop the bike inside a building and confirm it's pushed out
+  R.pushedOut = await page.evaluate(async ()=>{ const {bike,world}=window.__demo; const s=world.solids[0];
+    bike.mesh.position.set(s.x,0,s.z); await new Promise(r=>setTimeout(r,120));
+    const out = Math.abs(bike.position.x-s.x) >= s.hx || Math.abs(bike.position.z-s.z) >= s.hz; return out; });
 
-  // eat check: drain hunger, stand at restaurant, press E
-  await page.evaluate(() => { const {needs,world,bike}=window.__demo; needs.setHunger(20); bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); });
-  await page.keyboard.press('e');
-  await wait(150);
-  results.hungerAfterEat = await page.evaluate(() => window.__demo.needs.hunger);
+  // day/night: force midday for a daytime screenshot, confirm phase changes
+  const nightPhase = await page.evaluate(()=>window.__demo.dayNight.phase);
+  await page.evaluate(()=>{ const {dayNight}=window.__demo; dayNight.t=0.3; dayNight.apply(0); });
+  await wait(120); await shot(page,'p3-day.png');
+  const dayPhase = await page.evaluate(()=>window.__demo.dayNight.phase);
+  R.dayNightChanges = nightPhase !== dayPhase;
+  // back to dusk for the rest
+  await page.evaluate(()=>{ const {dayNight}=window.__demo; dayNight.t=0.78; dayNight.apply(0); });
 
-  // finish the shift: deliver current + remaining orders via teleport
-  results.summaryReached = await page.evaluate(async () => {
-    const { game, bike, world, STATES } = window.__demo;
-    const wait2 = ms => new Promise(r => setTimeout(r, ms));
-    let guard = 0;
-    while (game.state !== STATES.SHIFT_DONE && guard++ < 30) {
-      const order = game.current;
-      if (game.state === STATES.OFFER) { document.getElementById('oc-accept').click(); await wait2(60); }
-      if (game.state === STATES.TO_RESTAURANT) { bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); await wait2(120); }
-      else if (game.state === STATES.TO_HOUSE) {
-        if (game.needsRemake) { bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); await wait2(120); }
-        else { const h = world.houses[game.current.houseId]; bike.mesh.position.set(h.position3.x,0,h.position3.z); await wait2(200);
-          const btn = document.querySelector('#vg-choices .choice-btn'); if (btn) btn.click(); await wait2(150);
-          const cont = document.getElementById('po-continue'); if (cont) cont.click(); await wait2(150);
-        }
+  // finish the shift
+  R.summaryReached = await page.evaluate(async ()=>{ const {game,bike,world,STATES}=window.__demo; const w=ms=>new Promise(r=>setTimeout(r,ms));
+    let guard=0;
+    while(game.state!==STATES.SHIFT_DONE && guard++<30){
+      if(game.state===STATES.OFFER){ document.getElementById('oc-accept').click(); await w(60); }
+      if(game.state===STATES.TO_RESTAURANT){ bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); await w(120); }
+      else if(game.state===STATES.TO_HOUSE){
+        if(game.needsRemake){ bike.mesh.position.set(world.restaurantPos.x,0,world.restaurantPos.z); await w(120); }
+        else { const h=world.houses[game.current.houseId]; bike.mesh.position.set(h.position3.x,0,h.position3.z); await w(200);
+          const b=document.querySelector('#vg-choices .choice-btn'); if(b) b.click(); await w(150);
+          const c=document.getElementById('po-continue'); if(c) c.click(); await w(150); }
       }
     }
-    return game.state === STATES.SHIFT_DONE;
-  });
-  await wait(300);
-  results.summaryVisible = await page.$eval('#summary', el => !el.classList.contains('hidden'));
-  await shot(page, 'p2-summary.png');
+    return game.state===STATES.SHIFT_DONE; });
+  await wait(300); await shot(page,'p2-summary.png');
 
   await browser.close(); await new Promise(r=>server.close(r));
-
-  console.log('--- PHASE 2 RESULTS ---');
-  for (const [k,v] of Object.entries(results)) console.log(k.padEnd(20), ':', v);
-  console.log('page errors'.padEnd(20), ':', errors.length ? errors : 'none');
-
-  const ok = results.startMode === 'ON FOOT' && results.riding === true &&
-    results.carryingAfterPickup === 'fresh' && results.foodAfterCrash === 'destroyed' &&
-    results.foodAfterRemake === 'fresh' && results.gasRose === true &&
-    results.hungerAfterEat > 95 && results.summaryReached === true && errors.length === 0;
-  console.log('ALL CHECKS PASS'.padEnd(20), ':', ok);
-  if (!ok) process.exit(1);
+  console.log('--- PHASE 2+3 RESULTS ---');
+  for(const [k,v] of Object.entries(R)) console.log(k.padEnd(20),':',v);
+  console.log('page errors'.padEnd(20),':', errors.length?errors:'none');
+  const ok = R.startMode==='ON FOOT' && R.startOffShift==='OFF_SHIFT' && R.riding===true &&
+    R.clockedIn===true && R.stateAfterClockIn==='OFFER' && R.carryingAfterPickup==='fresh' &&
+    R.foodAfterCrash==='destroyed' && R.foodAfterRemake==='fresh' && R.gasRose===true &&
+    R.hungerAfterEat>95 && R.pushedOut===true && R.dayNightChanges===true &&
+    R.summaryReached===true && errors.length===0;
+  console.log('ALL CHECKS PASS'.padEnd(20),':',ok);
+  if(!ok) process.exit(1);
 }
 run().catch(e=>{console.error(e);process.exit(1);});

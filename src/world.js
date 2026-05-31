@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { PALETTE, WORLD, LANDMARKS, HOUSES, TUNING,
-  GAS_STATIONS, FOOD_STAND, TRAFFIC_LIGHT, SPEED_BUMPS } from './config.js';
+  GAS_STATIONS, FOOD_STANDS, TRAFFIC_LIGHT, SPEED_BUMPS } from './config.js';
 
 const C = (hex) => new THREE.Color(hex);
 
@@ -33,7 +33,7 @@ function makeGroundTexture() {
 
   const half = WORLD.half;
   const toPx = (w) => ((w + half) / (2 * half)) * N;
-  const roadW = (9 / (2 * half)) * N;
+  const roadW = ((WORLD.roadWidth ?? 9) / (2 * half)) * N;
 
   // road network on the block grid — lighter than the blocks so streets read
   ctx.fillStyle = '#241c38';
@@ -383,7 +383,7 @@ function makeTrafficLight() {
 // --- speed bump ------------------------------------------------------------
 function makeSpeedBump(axis) {
   const g = new THREE.Group();
-  const long = 9, narrow = 1.8;
+  const long = (WORLD.roadWidth ?? 9) - 1, narrow = 1.8;
   const w = axis === 'z' ? long : narrow;   // spans perpendicular to travel
   const d = axis === 'z' ? narrow : long;
   const hump = new THREE.Mesh(new THREE.BoxGeometry(w, 0.45, d),
@@ -418,24 +418,28 @@ export function buildWorld(scene) {
   scene.background = C(PALETTE.bg);
   scene.fog = new THREE.Fog(C(PALETTE.bg), 60, 165);
 
-  // lighting: lifted night ambient + a cool key light + a warm fill, so
-  // building masses and the street read clearly while keeping the mood.
-  scene.add(new THREE.HemisphereLight(C('#6a5fa0'), C('#1a1428'), 1.05));
+  // lighting refs are returned so the day/night controller can drive them.
+  const hemi = new THREE.HemisphereLight(C('#6a5fa0'), C('#1a1428'), 1.05);
+  scene.add(hemi);
   const key = new THREE.DirectionalLight(C('#b3a8e6'), 1.45);
   key.position.set(40, 80, 30);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
-  const s = 90;
+  const s = WORLD.half + 30;
   key.shadow.camera.left = -s; key.shadow.camera.right = s;
   key.shadow.camera.top = s; key.shadow.camera.bottom = -s;
-  key.shadow.camera.near = 1; key.shadow.camera.far = 220;
+  key.shadow.camera.near = 1; key.shadow.camera.far = 360;
   key.shadow.bias = -0.0004;
   scene.add(key);
-  // warm low fill from the "city glow" opposite the key
   const fill = new THREE.DirectionalLight(C('#ffce8a'), 0.35);
   fill.position.set(-50, 24, -40);
   scene.add(fill);
-  scene.add(new THREE.AmbientLight(C(PALETTE.system), 0.42));
+  const ambient = new THREE.AmbientLight(C(PALETTE.system), 0.42);
+  scene.add(ambient);
+
+  // solids: AABB footprints the player cannot drive through
+  const solids = [];
+  const addSolid = (x, z, hx, hz) => solids.push({ x, z, hx, hz });
 
   // ground
   const ground = new THREE.Mesh(
@@ -452,7 +456,7 @@ export function buildWorld(scene) {
     ...LANDMARKS.map(l => ({ x: l.position.x, z: l.position.z, r: 16 })),
     ...HOUSES.map(h => ({ x: h.position.x, z: h.position.z, r: 12 })),
     ...GAS_STATIONS.map(s => ({ x: s.position.x, z: s.position.z, r: 13 })),
-    { x: FOOD_STAND.position.x, z: FOOD_STAND.position.z, r: 9 },
+    ...FOOD_STANDS.map(s => ({ x: s.position.x, z: s.position.z, r: 9 })),
     { x: TRAFFIC_LIGHT.position.x, z: TRAFFIC_LIGHT.position.z, r: 10 },
   ];
   const clear = (x, z) => reserved.every(p => Math.hypot(p.x - x, p.z - z) > p.r);
@@ -472,8 +476,12 @@ export function buildWorld(scene) {
         const w = 6 + rng() * 6, d = 6 + rng() * 6, h = 8 + rng() * 26;
         const b = makeBuilding(w, h, d, baseHexes[(rng() * baseHexes.length) | 0], rng);
         b.position.set(x, 0, z);
-        b.rotation.y = (Math.floor(rng() * 4)) * Math.PI / 2;
+        const rot = Math.floor(rng() * 4);
+        b.rotation.y = rot * Math.PI / 2;
         scene.add(b);
+        // footprint AABB (w/d swap on 90°/270° rotations)
+        const swap = rot % 2 === 1;
+        addSolid(x, z, (swap ? d : w) / 2 + 0.4, (swap ? w : d) / 2 + 0.4);
       }
     }
   }
@@ -495,12 +503,22 @@ export function buildWorld(scene) {
     obj.position.set(l.position.x, 0, l.position.z);
     scene.add(obj);
     landmarkObjs[l.id] = { ...l, object: obj };
+    addSolid(l.position.x, l.position.z, 6, 6);
   }
 
-  // restaurant
+  // restaurant (also the clock-in hub)
   const restaurant = makeRestaurant();
   restaurant.position.set(WORLD.restaurant.position.x, 0, WORLD.restaurant.position.z);
   scene.add(restaurant);
+  addSolid(WORLD.restaurant.position.x, WORLD.restaurant.position.z, 7.5, 6.5);
+
+  // glowing clock-in pad in front of the restaurant
+  const padMat = new THREE.MeshBasicMaterial({ color: C(PALETTE.action), transparent: true, opacity: .35, side: THREE.DoubleSide });
+  const clockPad = new THREE.Mesh(new THREE.RingGeometry(4.4, 5.6, 36), padMat);
+  clockPad.rotation.x = -Math.PI / 2;
+  clockPad.position.set(WORLD.restaurant.position.x, 0.08, WORLD.restaurant.position.z + 11);
+  scene.add(clockPad);
+  const clockInPos = new THREE.Vector3(WORLD.restaurant.position.x, 0, WORLD.restaurant.position.z + 11);
 
   // houses (accent door colour follows the adjacent landmark)
   const houses = {};
@@ -513,6 +531,7 @@ export function buildWorld(scene) {
     obj.rotation.y = Math.atan2(-h.position.x, -h.position.z);
     scene.add(obj);
     houses[h.id] = { ...h, object: obj, position3: new THREE.Vector3(h.position.x, 0, h.position.z) };
+    addSolid(h.position.x, h.position.z, 5, 5);
   }
 
   // gas stations
@@ -523,12 +542,14 @@ export function buildWorld(scene) {
     return { ...stn, object: obj, position3: new THREE.Vector3(stn.position.x, 0, stn.position.z) };
   });
 
-  // food stand
-  const foodStandObj = makeFoodStand();
-  foodStandObj.position.set(FOOD_STAND.position.x, 0, FOOD_STAND.position.z);
-  foodStandObj.rotation.y = Math.atan2(-FOOD_STAND.position.x, -FOOD_STAND.position.z);
-  scene.add(foodStandObj);
-  const foodStand = { ...FOOD_STAND, object: foodStandObj, position3: new THREE.Vector3(FOOD_STAND.position.x, 0, FOOD_STAND.position.z) };
+  // food stands (eat at any of them, or at the restaurant)
+  const foodStands = FOOD_STANDS.map(st => {
+    const obj = makeFoodStand();
+    obj.position.set(st.position.x, 0, st.position.z);
+    obj.rotation.y = Math.atan2(-st.position.x, -st.position.z);
+    scene.add(obj);
+    return { ...st, object: obj, position3: new THREE.Vector3(st.position.x, 0, st.position.z) };
+  });
 
   // traffic light
   const tl = makeTrafficLight();
@@ -578,6 +599,8 @@ export function buildWorld(scene) {
       r.scale.setScalar(0.92 + Math.sin(t * 4) * 0.08);
     }
     restaurant.userData.beam.material.opacity = 0.10 + Math.sin(t * 2) * 0.03;
+    padMat.opacity = 0.28 + Math.sin(t * 3) * 0.14;
+    clockPad.scale.setScalar(1 + Math.sin(t * 3) * 0.04);
 
     // pedestrians oscillate along their segment with a gentle bob
     for (const p of peds) {
@@ -593,12 +616,15 @@ export function buildWorld(scene) {
   return {
     restaurant,
     restaurantPos: new THREE.Vector3(WORLD.restaurant.position.x, 0, WORLD.restaurant.position.z),
+    clockInPos,
     houses,
     landmarks: landmarkObjs,
     gasStations,
-    foodStand,
+    foodStands,
     trafficLight,
     marker,
+    solids,
+    lights: { hemi, key, fill, ambient },
     update,
   };
 }

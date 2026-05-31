@@ -13,22 +13,38 @@ function makeOrders() {
   ];
 }
 const TUNING = { ordersPerShift: 3 };
+// a game that's already clocked in (most tests exercise the on-shift loop)
+function shifted() { const g = new GameState(makeOrders(), TUNING); g.clockIn(); return g; }
 
-test('starts in OFFER with first order', () => {
+test('starts OFF_SHIFT with no order until clocked in', () => {
   const g = new GameState(makeOrders(), TUNING);
+  assert.equal(g.state, 'OFF_SHIFT');
+  assert.equal(g.current, null);
+  assert.equal(g.onShift, false);
+});
+
+test('clockIn opens the first order', () => {
+  const g = new GameState(makeOrders(), TUNING);
+  g.clockIn();
   assert.equal(g.state, 'OFFER');
   assert.equal(g.current.id, 'a');
+  assert.equal(g.onShift, true);
   assert.equal(g.cash, 0);
 });
 
-test('accept moves to TO_RESTAURANT', () => {
+test('cannot accept before clocking in', () => {
   const g = new GameState(makeOrders(), TUNING);
+  assert.throws(() => g.accept(), /OFF_SHIFT|OFFER|expected/i);
+});
+
+test('accept moves to TO_RESTAURANT', () => {
+  const g = shifted();
   g.accept();
   assert.equal(g.state, 'TO_RESTAURANT');
 });
 
 test('happy path reaches PAID then next() offers a new order', () => {
-  const g = new GameState(makeOrders(), TUNING);
+  const g = shifted();
   g.accept();
   assert.equal(g.arriveRestaurant(), 'PICKED_UP'); // transient beat returned
   assert.equal(g.state, 'TO_HOUSE');
@@ -43,7 +59,7 @@ test('happy path reaches PAID then next() offers a new order', () => {
 });
 
 test('after ordersPerShift orders, next() ends the shift', () => {
-  const g = new GameState(makeOrders(), TUNING);
+  const g = shifted();
   for (let i = 0; i < 3; i++) {
     g.accept(); g.arriveRestaurant(); g.arriveHouse();
     g.resolveHandoff('quick');
@@ -55,11 +71,11 @@ test('after ordersPerShift orders, next() ends the shift', () => {
 });
 
 test('matching the customer preference beats a mismatch (tip + rating)', () => {
-  const g1 = new GameState(makeOrders(), TUNING);
+  const g1 = shifted();
   g1.accept(); g1.arriveRestaurant(); g1.arriveHouse();
   const match = g1.resolveHandoff('friendly'); // order a prefers friendly
 
-  const g2 = new GameState(makeOrders(), TUNING);
+  const g2 = shifted();
   g2.accept(); g2.arriveRestaurant(); g2.arriveHouse();
   const miss = g2.resolveHandoff('quick'); // mismatch
 
@@ -69,7 +85,7 @@ test('matching the customer preference beats a mismatch (tip + rating)', () => {
 });
 
 test('food starts NONE, becomes FRESH at pickup, NONE after delivery', () => {
-  const g = new GameState(makeOrders(), TUNING);
+  const g = shifted();
   assert.equal(g.foodState, FOOD.NONE);
   g.accept(); g.arriveRestaurant();
   assert.equal(g.foodState, FOOD.FRESH);
@@ -79,7 +95,7 @@ test('food starts NONE, becomes FRESH at pickup, NONE after delivery', () => {
 });
 
 test('damaged food cuts the tip and caps the rating', () => {
-  const g = new GameState(makeOrders(), TUNING);
+  const g = shifted();
   g.accept(); g.arriveRestaurant();
   g.damageFood('minor');
   assert.equal(g.foodState, FOOD.DAMAGED);
@@ -90,7 +106,7 @@ test('damaged food cuts the tip and caps the rating', () => {
 });
 
 test('a crash destroys food, blocks hand-off, and remake restocks fresh', () => {
-  const g = new GameState(makeOrders(), TUNING);
+  const g = shifted();
   g.accept(); g.arriveRestaurant();
   g.damageFood('crash');
   assert.equal(g.needsRemake, true);
@@ -103,14 +119,14 @@ test('a crash destroys food, blocks hand-off, and remake restocks fresh', () => 
 });
 
 test('illegal transitions throw', () => {
-  const g = new GameState(makeOrders(), TUNING);
+  const g = shifted();
   assert.throws(() => g.arriveHouse(), /OFFER|expected/i);
   g.accept();
   assert.throws(() => g.accept(), /TO_RESTAURANT|expected/i);
 });
 
 test('summary totals match accumulated cash and ratings', () => {
-  const g = new GameState(makeOrders(), TUNING);
+  const g = shifted();
   let expectedCash = 0;
   const ratings = [];
   for (let i = 0; i < 3; i++) {

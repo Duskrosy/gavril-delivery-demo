@@ -38,17 +38,23 @@ function makeCar(colorHex) {
   return g;
 }
 
-// Cars are defined by the road line they ride and a travel axis.
-function carLanes() {
-  return [
-    { axis: 'z', line: 0,   dir: 1,  start: -40 },
-    { axis: 'z', line: 0,   dir: -1, start: 30 },
-    { axis: 'z', line: 24,  dir: 1,  start: 10 },
-    { axis: 'z', line: -24, dir: -1, start: -20 },
-    { axis: 'x', line: 0,   dir: 1,  start: -30 },
-    { axis: 'x', line: 24,  dir: -1, start: 20 },
-    { axis: 'x', line: -24, dir: 1,  start: 0 },
-  ];
+// Cars ride a road line on a travel axis. Lanes are generated across the
+// whole road grid, deterministically, up to `count`.
+function carLanes(count) {
+  const half = WORLD.half, step = WORLD.blockSpacing;
+  const lines = [];
+  for (let g = -half + step; g < half; g += step) lines.push(g);
+  const lanes = [];
+  let seed = 1337;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  let i = 0;
+  while (lanes.length < count && i < 500) {
+    const line = lines[i % lines.length];
+    const axis = (i % 2 === 0) ? 'z' : 'x';
+    lanes.push({ axis, line, dir: rnd() > 0.5 ? 1 : -1, start: (rnd() * 2 - 1) * (half - 8) });
+    i++;
+  }
+  return lanes;
 }
 
 class TrafficLightCtrl {
@@ -82,7 +88,7 @@ class TrafficLightCtrl {
 export class Traffic {
   constructor(scene, lightRefs) {
     this.cars = [];
-    for (const lane of carLanes()) {
+    for (const lane of carLanes(TUNING.carCount)) {
       const mesh = makeCar(CAR_COLORS[this.cars.length % CAR_COLORS.length]);
       scene.add(mesh);
       this.cars.push({ ...lane, pos: lane.start, speed: TUNING.carSpeed, mesh });
@@ -137,25 +143,37 @@ export class Traffic {
     this._place();
   }
 
-  // Nearest car overlapping `body`. Returns {relSpeed, dir} or null.
-  collide(body) {
-    const R = 3.4; // combined collision radius (car + bike)
-    let best = null, bestD = R;
+  // Car footprints as AABBs for solid push-out (oriented to each car's axis).
+  solidBoxes() {
+    return this.cars.map(c => c.axis === 'z'
+      ? { x: c._wx, z: c._wz, hx: 1.3, hz: 2.3 }
+      : { x: c._wx, z: c._wz, hx: 2.3, hz: 1.3 });
+  }
+
+  // Strongest car whose footprint (oriented AABB) overlaps the body circle of
+  // radius r. Overlap-based so it must be called BEFORE solid push-out.
+  // Returns { relSpeed, dir } or null.
+  collide(body, r = 1.8) {
+    let best = null, bestPen = 0;
     for (const car of this.cars) {
+      const hx = car.axis === 'z' ? 1.3 : 2.3;
+      const hz = car.axis === 'z' ? 2.3 : 1.3;
       const dx = body.position.x - car._wx;
       const dz = body.position.z - car._wz;
-      const d = Math.hypot(dx, dz);
-      if (d < bestD) { bestD = d; best = { car, dx, dz, d }; }
+      const ox = (hx + r) - Math.abs(dx);
+      const oz = (hz + r) - Math.abs(dz);
+      if (ox > 0 && oz > 0) {
+        const pen = Math.min(ox, oz);
+        if (pen > bestPen) { bestPen = pen; best = { car, dx, dz }; }
+      }
     }
     if (!best) return null;
 
-    // relative speed of approach
     this._bodyVel.copy(body.headingVec).multiplyScalar(body.speed || 0);
     if (best.car.axis === 'z') this._carVel.set(0, 0, best.car.dir * best.car.speed);
     else this._carVel.set(best.car.dir * best.car.speed, 0, 0);
     this._rel.copy(this._bodyVel).sub(this._carVel);
-    const relSpeed = this._rel.length();
-    this._dir.set(best.dx, 0, best.dz); // push body away from car
-    return { relSpeed, dir: this._dir.clone() };
+    this._dir.set(best.dx, 0, best.dz);
+    return { relSpeed: this._rel.length(), dir: this._dir.clone() };
   }
 }

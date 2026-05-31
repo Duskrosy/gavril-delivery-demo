@@ -1,8 +1,9 @@
 // ============================================================
 //  GAVRIL — One Shift · main.js
-//  Bootstrap + render loop + input, wiring GameState (logic),
-//  world/avatar/bike/traffic (3D), needs (pace governors), and the
-//  HUD (DOM). On foot by default; walk to the bike and press F to ride.
+//  Bootstrap + render loop + input. On foot by default; walk to the
+//  bike and press F to ride. Clock in at the restaurant to receive
+//  orders. Day/night cycles continuously; cars, a traffic light,
+//  speed bumps, and solid collision make the city feel alive.
 // ============================================================
 
 import * as THREE from 'three';
@@ -11,26 +12,29 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { ORDERS, CUSTOMERS, TUNING, SPAWN, PALETTE, SPEED_BUMPS, customerById } from './config.js';
+import { ORDERS, CUSTOMERS, TUNING, SPAWN, WORLD, PALETTE, SPEED_BUMPS, customerById } from './config.js';
 import { GameState, STATES } from './game.js';
 import { FOOD } from './rules.js';
 import { Needs } from './needs.js';
+import { resolveSolids } from './collision.js';
 import { loadImages } from './assets.js';
 import { buildWorld } from './world.js';
 import { Player } from './player.js';
 import { Avatar } from './avatar.js';
 import { Mount } from './mount.js';
 import { Traffic } from './traffic.js';
+import { DayNight } from './daynight.js';
 import { FollowCam } from './camera.js';
 import { HUD } from './ui.js';
 
 const joinedOrders = ORDERS.map(o => ({ ...o, customer: customerById(o.customerId) }));
-const SHIFT_CLOCKS = ['Evening', 'Dinner rush', 'Late-night'];
 const FOOD_COLOR = { [FOOD.FRESH]: PALETTE.action, [FOOD.DAMAGED]: PALETTE.reward, [FOOD.DESTROYED]: PALETTE.decision };
 const CAM = {
   foot: { dist: TUNING.footCamDist, height: TUNING.footCamHeight, look: TUNING.footCamLook, lerp: TUNING.footCamLerp },
   bike: { dist: TUNING.camDist, height: TUNING.camHeight, look: TUNING.camLook, lerp: TUNING.camLerp },
 };
+const FOOT_R = 1.3, BIKE_R = 1.9;
+const ROAD_HALF = (WORLD.roadWidth ?? 12) / 2;
 
 // --- renderer / scene / camera ---------------------------------------------
 const canvas = document.getElementById('app');
@@ -40,15 +44,15 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.18;
+renderer.toneMappingExposure = 1.15;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 400);
-camera.position.set(0, 9, 44);
+const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 600);
+camera.position.set(0, 9, 48);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.62, 0.4, 0.82);
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.62, 0.45, 0.82);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -59,6 +63,7 @@ const bike = new Player(scene, SPAWN.bike);
 const followCam = new FollowCam(camera);
 const mount = new Mount(avatar, bike, followCam);
 const traffic = new Traffic(scene, world.trafficLight);
+const dayNight = new DayNight({ scene, ...world.lights });
 const needs = new Needs(TUNING);
 const game = new GameState(joinedOrders, TUNING);
 const hud = new HUD();
@@ -68,7 +73,7 @@ let handoffOpen = false;
 let started = false;
 let collideCd = 0;
 let bumpCd = 0;
-const _kb = new THREE.Vector3();
+let lastPhase = '';
 
 // --- input ------------------------------------------------------------------
 const input = { forward: false, back: false, left: false, right: false };
@@ -85,15 +90,18 @@ addEventListener('keyup', (e) => { if (KEYMAP[e.code]) { input[KEYMAP[e.code]] =
 
 const noInput = { forward: false, back: false, left: false, right: false };
 const dist2 = (a, p) => Math.hypot(a.x - p.x, a.z - p.z);
-const SPEED_BUMP_POS = SPEED_BUMPS.map(b => b.position);
+const nearClockIn = (body) => dist2(body.position, world.clockInPos) < TUNING.clockInRadius
+  || dist2(body.position, world.restaurantPos) < TUNING.clockInRadius;
+const nearEat = (body) => dist2(body.position, world.restaurantPos) < TUNING.eatRadius
+  || world.foodStands.some(s => dist2(body.position, s.position3) < TUNING.eatRadius);
+const onGasPad = (body) => world.gasStations.some(s => dist2(body.position, s.position3) < TUNING.refuelRadius);
 
-// --- order presentation -----------------------------------------------------
+// --- order / shift ----------------------------------------------------------
 function presentOrder() {
   const order = game.current;
   if (!order) return;
   hud.showOrder(order, assets[order.food], tryAccept);
   hud.setObjective(`New order from <b>${order.customer.name}</b> — accept to start`);
-  hud.setStats({ clock: SHIFT_CLOCKS[Math.min(game.served, SHIFT_CLOCKS.length - 1)] });
 }
 
 function tryAccept() {
@@ -103,17 +111,19 @@ function tryAccept() {
   hud.setObjective('Head to the <b>glowing restaurant</b> to grab the order');
 }
 
-// E: accept an offer, or eat if next to a food source
+function clockIn() {
+  game.clockIn();
+  hud.toast('Clocked in — first order!');
+  presentOrder();
+}
+
+// E: clock in (off shift @ hub) · accept an offer · or eat by a food source
 function tryAction() {
   if (!started) return;
-  if (game.state === STATES.OFFER) { tryAccept(); return; }
   const body = mount.body;
-  const nearEat = dist2(body.position, world.restaurantPos) < TUNING.eatRadius
-    || dist2(body.position, world.foodStand.position3) < TUNING.eatRadius;
-  if (nearEat && needs.hunger < TUNING.hungerMax - 1) {
-    needs.eat();
-    hud.toast('Fed — back to full');
-  }
+  if (game.state === STATES.OFF_SHIFT) { if (nearClockIn(body)) clockIn(); return; }
+  if (game.state === STATES.OFFER) { tryAccept(); return; }
+  if (nearEat(body) && needs.hunger < TUNING.hungerMax - 1) { needs.eat(); hud.toast('Fed — back to full'); }
 }
 
 function tryMount() {
@@ -123,21 +133,18 @@ function tryMount() {
   else if (r === 'dismounted') { hud.setMode(false); hud.toast('Hopped off'); }
 }
 
-// --- loop beats -------------------------------------------------------------
 function reachRestaurant() {
   game.arriveRestaurant();
   const order = game.current;
   hud.toast('Order picked up');
   hud.setObjective(`Deliver to <b>${order.customer.name}</b> — ${order.addressHint}`);
 }
-
 function doRemake() {
   game.remakePickup();
   const order = game.current;
   hud.toast('Fresh remake — go!');
   hud.setObjective(`Deliver to <b>${order.customer.name}</b> — ${order.addressHint}`);
 }
-
 function reachHouse() {
   game.arriveHouse();
   handoffOpen = true;
@@ -167,52 +174,50 @@ function replay() {
   hud.setMode(false);
   hud.setStats({ cash: 0, avgRating: 5, served: 0, total: game.ordersPerShift });
   hud.el.hud.classList.remove('hidden');
-  presentOrder();
+  hud.setObjective('Back on the clock? Head to the <b>restaurant</b> and press <kbd>E</kbd> to clock in');
 }
 
 // --- collisions & hazards ---------------------------------------------------
-function handleCollisions(dt) {
+// Car impact runs BEFORE solid push-out (it needs the overlap to still exist).
+function handleCarImpact(dt, r) {
   collideCd = Math.max(0, collideCd - dt);
+  if (collideCd > 0) return;
+  const body = mount.body;
+  const hit = traffic.collide(body, r);
+  if (!hit || hit.relSpeed < TUNING.impactMinor) return;
+  collideCd = TUNING.collisionCooldown;
+  body.applyKnockback(hit.dir, TUNING.knockback);
+  followCam.addShake(hit.relSpeed >= TUNING.impactCrash ? 0.9 : 0.4);
+  if (game.carrying) {
+    const impact = hit.relSpeed >= TUNING.impactCrash ? 'crash' : 'minor';
+    const state = game.damageFood(impact);
+    if (state === FOOD.DESTROYED) {
+      hud.toast('Food destroyed!');
+      hud.setObjective('Order ruined — ride back to the <b>restaurant</b> for a remake');
+    } else hud.toast('Careful! Order shaken');
+  } else hud.toast('Crash!');
+}
+
+// Speed bumps — road-band detection (perpendicular distance to the bump line).
+function handleBumps(dt) {
   bumpCd = Math.max(0, bumpCd - dt);
   const body = mount.body;
-
-  // cars
-  if (collideCd === 0) {
-    const hit = traffic.collide(body);
-    if (hit && hit.relSpeed >= TUNING.impactMinor) {
-      collideCd = TUNING.collisionCooldown;
-      body.applyKnockback(hit.dir, TUNING.knockback);
-      followCam.addShake(hit.relSpeed >= TUNING.impactCrash ? 0.9 : 0.4);
-      if (game.carrying) {
-        const impact = hit.relSpeed >= TUNING.impactCrash ? 'crash' : 'minor';
-        const state = game.damageFood(impact);
-        if (state === FOOD.DESTROYED) {
-          hud.toast('Food destroyed!');
-          hud.setObjective('Order ruined — ride back to the <b>restaurant</b> for a remake');
-        } else {
-          hud.toast('Careful! Order shaken');
-        }
-      } else {
-        hud.toast('Crash!');
-      }
-    }
-  }
-
-  // speed bumps — slow + jolt when crossing
-  if (bumpCd === 0 && Math.abs(body.speed) > 4) {
-    for (const b of SPEED_BUMP_POS) {
-      if (dist2(body.position, b) < 2.2) {
-        body.speed *= TUNING.bumpSlowMult;
-        followCam.addShake(0.25);
-        bumpCd = TUNING.bumpCooldown;
-        break;
-      }
+  if (bumpCd > 0 || Math.abs(body.speed) <= 3) return;
+  for (const b of SPEED_BUMPS) {
+    const perp = b.axis === 'z' ? Math.abs(body.position.z - b.position.z) : Math.abs(body.position.x - b.position.x);
+    const along = b.axis === 'z' ? Math.abs(body.position.x - b.position.x) : Math.abs(body.position.z - b.position.z);
+    if (perp < TUNING.bumpBand && along < ROAD_HALF) {
+      body.speed *= TUNING.bumpSlowMult;
+      followCam.addShake(TUNING.bumpBounce);
+      bumpCd = TUNING.bumpCooldown;
+      break;
     }
   }
 }
 
 // --- waypoint target --------------------------------------------------------
 function targetForState() {
+  if (game.state === STATES.OFF_SHIFT) return world.clockInPos;
   const order = game.current;
   if (!order) return null;
   if (game.state === STATES.TO_RESTAURANT) return world.restaurantPos;
@@ -251,19 +256,15 @@ function updateWaypoint() {
   hud.setWaypoint({ visible: true, x: px, y: py, angle: Math.atan2(dy, dx) + Math.PI / 2, dist });
 }
 
-// --- contextual prompt ------------------------------------------------------
 function updatePrompt() {
   const body = mount.body;
+  if (game.state === STATES.OFF_SHIFT && nearClockIn(body)) { hud.setPrompt('Press <kbd>E</kbd> to clock in'); return; }
   if (!mount.isRiding && mount.canMount()) { hud.setPrompt('Press <kbd>F</kbd> to ride'); return; }
-  const onPad = mount.isRiding && world.gasStations.some(s => dist2(body.position, s.position3) < TUNING.refuelRadius);
-  if (onPad && needs.gas < TUNING.gasMax - 1) { hud.setPrompt('Refueling…'); return; }
-  const nearEat = (dist2(body.position, world.restaurantPos) < TUNING.eatRadius
-    || dist2(body.position, world.foodStand.position3) < TUNING.eatRadius) && needs.hunger < TUNING.hungerMax - 1;
-  if (nearEat) { hud.setPrompt('Press <kbd>E</kbd> to eat'); return; }
+  if (mount.isRiding && onGasPad(body) && needs.gas < TUNING.gasMax - 1) { hud.setPrompt('Refueling…'); return; }
+  if (nearEat(body) && needs.hunger < TUNING.hungerMax - 1) { hud.setPrompt('Press <kbd>E</kbd> to eat'); return; }
   hud.setPrompt('');
 }
 
-// --- food indicator on the active body -------------------------------------
 function updateCarryVisual() {
   const fs = game.foodState;
   const carrying = fs !== FOOD.NONE;
@@ -282,30 +283,31 @@ function tick() {
   const body = mount.body;
   const active = started && !handoffOpen;
 
-  // movement with pace-governor multipliers
-  const ctrl = active ? input : noInput;
-  if (mount.isRiding) {
-    body.update(dt, ctrl, { speedMult: needs.bikeSpeedMult, engineCut: needs.engineCut });
-  } else {
-    body.update(dt, ctrl, { speedMult: needs.moveSpeedMult });
-  }
-  followCam.follow(body.position, body.headingVec, dt, mount.isRiding ? CAM.bike : CAM.foot);
-
+  // advance the living world first so collision uses current car positions
+  dayNight.update(dt);
+  bloom.strength = dayNight.bloom;
   world.update(dt);
   traffic.update(dt);
+
+  const ctrl = active ? input : noInput;
+  if (mount.isRiding) body.update(dt, ctrl, { speedMult: needs.bikeSpeedMult, engineCut: needs.engineCut });
+  else body.update(dt, ctrl, { speedMult: needs.moveSpeedMult });
+
+  const r = mount.isRiding ? BIKE_R : FOOT_R;
 
   if (active) {
     const moving = Math.abs(body.speed) > 1;
     needs.update(dt, { riding: mount.isRiding, moving });
+    if (mount.isRiding && onGasPad(body)) needs.refuel(dt);
+    handleCarImpact(dt, r);              // detect overlaps BEFORE push-out
+  }
 
-    // auto-refuel on a gas pad
-    if (mount.isRiding && world.gasStations.some(s => dist2(body.position, s.position3) < TUNING.refuelRadius)) {
-      needs.refuel(dt);
-    }
+  // solid push-out: cannot pass through buildings or cars
+  resolveSolids(body.position, r, world.solids);
+  resolveSolids(body.position, r, traffic.solidBoxes());
 
-    handleCollisions(dt);
-
-    // proximity beats
+  if (active) {
+    handleBumps(dt);
     if (game.state === STATES.TO_RESTAURANT && dist2(body.position, world.restaurantPos) < TUNING.pickupRadius) {
       reachRestaurant();
     } else if (game.state === STATES.TO_HOUSE) {
@@ -316,14 +318,16 @@ function tick() {
         if (h && dist2(body.position, h.position3) < TUNING.handoffRadius) reachHouse();
       }
     }
-
     updatePrompt();
   } else {
     hud.setPrompt('');
   }
 
+  followCam.follow(body.position, body.headingVec, dt, mount.isRiding ? CAM.bike : CAM.foot);
+
   // HUD reflections
   hud.setNeeds({ gasPct: needs.gasPct, hungerPct: needs.hungerPct, lowGas: needs.lowGas, lowHunger: needs.lowHunger });
+  if (dayNight.phase !== lastPhase) { hud.setStats({ clock: dayNight.phase }); lastPhase = dayNight.phase; }
   updateCarryVisual();
   updateWaypoint();
 
@@ -351,12 +355,12 @@ hud.onStart(() => {
   started = true;
   hud.beginPlay();
   hud.setMode(false);
-  hud.setStats({ cash: 0, avgRating: 5, served: 0, total: game.ordersPerShift });
-  presentOrder();
+  hud.setStats({ cash: 0, avgRating: 5, served: 0, total: game.ordersPerShift, clock: dayNight.phase });
+  hud.setObjective('Walk or ride to the <b>restaurant</b> and press <kbd>E</kbd> to clock in');
 });
 
 if (new URLSearchParams(location.search).get('dev')) {
-  window.__demo = { game, avatar, bike, mount, needs, traffic, world, hud, STATES, FOOD, TUNING, get input() { return input; } };
+  window.__demo = { game, avatar, bike, mount, needs, traffic, dayNight, world, hud, STATES, FOOD, TUNING, get input() { return input; } };
 }
 
 boot();

@@ -7,6 +7,7 @@
 import { FOOD, nextFoodState, deliveryModifiers } from './rules.js';
 
 export const STATES = Object.freeze({
+  OFF_SHIFT: 'OFF_SHIFT',  // free-roam, no orders until you clock in
   OFFER: 'OFFER',
   TO_RESTAURANT: 'TO_RESTAURANT',
   PICKED_UP: 'PICKED_UP',
@@ -42,11 +43,12 @@ export class GameState {
     this.#ratings = [];
     this.#lastResult = null;
     this.#carried = FOOD.NONE;
-    this.#state = STATES.OFFER;
+    this.#state = STATES.OFF_SHIFT;
   }
 
   // --- queries -------------------------------------------------------------
   get state() { return this.#state; }
+  get onShift() { return this.#state !== STATES.OFF_SHIFT && this.#state !== STATES.SHIFT_DONE; }
   get cash() { return this.#cash; }
   get served() { return this.#served; }
   get ordersPerShift() { return this.#ordersPerShift; }
@@ -56,7 +58,7 @@ export class GameState {
   get needsRemake() { return this.#carried === FOOD.DESTROYED; }
 
   get current() {
-    if (this.#state === STATES.SHIFT_DONE) return null;
+    if (this.#state === STATES.OFF_SHIFT || this.#state === STATES.SHIFT_DONE) return null;
     return this.#orders[this.#index];
   }
 
@@ -78,6 +80,14 @@ export class GameState {
   }
 
   // --- transitions ---------------------------------------------------------
+  // Clock in at the hub to start receiving orders (optional — no orders arrive
+  // while OFF_SHIFT).
+  clockIn() {
+    this.#expect(STATES.OFF_SHIFT);
+    this.#state = STATES.OFFER;
+    return this.#state;
+  }
+
   accept() {
     this.#expect(STATES.OFFER);
     this.#state = STATES.TO_RESTAURANT;
@@ -160,7 +170,7 @@ export class GameState {
     this.#ratings = [];
     this.#lastResult = null;
     this.#carried = FOOD.NONE;
-    this.#state = STATES.OFFER;
+    this.#state = STATES.OFF_SHIFT;
     return this.#state;
   }
 }
