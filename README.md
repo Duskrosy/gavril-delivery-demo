@@ -50,6 +50,10 @@ Midday → Dinner → Late-night), shown in the HUD.
   riders** weave the roads and hang out at spots, and **points of interest** — plazas, a
   park, food-truck corners — draw little crowds around the city.
 - **Camera**: Roblox-style orbit — right-drag or **Ctrl shift-lock** to look around, wheel to zoom.
+- **Multiplayer** *(optional)*: a tiny single-room relay server (`server/`). Each player
+  gets a **random name + color** and sees everyone else move around with name tags. Add
+  `?server=wss://YOUR-HOST` to the URL (or set `MULTIPLAYER.url` in `config.js`). With no
+  server it's single-player. See `server/README.md` to run/host it.
 
 ## Tests (logic only, headless)
 

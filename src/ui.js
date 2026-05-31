@@ -31,6 +31,7 @@ export class HUD {
       orderCard: $('order-card'), ocImg: $('oc-img'), ocFood: $('oc-food'),
       ocCust: $('oc-cust'), ocPay: $('oc-pay'), ocAddr: $('oc-addr'), ocAccept: $('oc-accept'),
       toast: $('toast'),
+      mp: $('mp'), mpText: $('mp-text'),
       modeChip: $('mode-chip'), modeText: $('mode-text'),
       fillGas: $('fill-gas'), fillHunger: $('fill-hunger'), carry: $('carry'), prompt: $('prompt'),
       vignette: $('vignette'), vgImg: $('vg-img'), vgName: $('vg-name'), vgLine: $('vg-line'), vgChoices: $('vg-choices'),
@@ -86,6 +87,13 @@ export class HUD {
     if (!html) { this.el.prompt.classList.add('hidden'); return; }
     this.el.prompt.innerHTML = html;
     this.el.prompt.classList.remove('hidden');
+  }
+
+  // multiplayer status pill (top-right). name=null hides it.
+  setMultiplayer(name, online) {
+    if (!name) { this.el.mp.classList.add('hidden'); return; }
+    this.el.mp.classList.remove('hidden');
+    this.el.mpText.innerHTML = `<b>${name}</b> · ${online} online`;
   }
 
   // --- order card --------------------------------------------------------

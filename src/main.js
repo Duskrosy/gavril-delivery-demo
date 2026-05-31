@@ -12,7 +12,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { ORDERS, CUSTOMERS, TUNING, SPAWN, WORLD, PALETTE, SPEED_BUMPS, CAMERA, customerById } from './config.js';
+import { ORDERS, CUSTOMERS, TUNING, SPAWN, WORLD, PALETTE, SPEED_BUMPS, CAMERA, MULTIPLAYER, customerById } from './config.js';
 import { GameState, STATES } from './game.js';
 import { FOOD } from './rules.js';
 import { Needs } from './needs.js';
@@ -25,6 +25,8 @@ import { Mount } from './mount.js';
 import { Traffic } from './traffic.js';
 import { DayNight } from './daynight.js';
 import { OrbitCam } from './camera.js';
+import { Net } from './net.js';
+import { RemotePlayers } from './remote.js';
 import { HUD } from './ui.js';
 
 const joinedOrders = ORDERS.map(o => ({ ...o, customer: customerById(o.customerId) }));
@@ -63,6 +65,13 @@ const dayNight = new DayNight({ scene, ...world.lights });
 const needs = new Needs(TUNING);
 const game = new GameState(joinedOrders, TUNING);
 const hud = new HUD();
+
+// multiplayer (optional): ?server=wss://… overrides config; empty = single-player
+const serverUrl = new URLSearchParams(location.search).get('server') || MULTIPLAYER.url;
+const net = new Net(serverUrl);
+const remotePlayers = new RemotePlayers(scene);
+net.connect((w) => hud.setMultiplayer(w.name, net.online));
+let netT = 0, mpStatusT = 0;
 
 let assets = {};
 let handoffOpen = false;
@@ -392,6 +401,15 @@ function tick() {
   updateCarryVisual();
   updateWaypoint();
 
+  // multiplayer: throttled state send + interpolate remote players
+  if (net.url) {
+    netT += dt;
+    if (netT >= 0.066) { netT = 0; net.send({ x: body.position.x, z: body.position.z, yaw: body.yaw, riding: mount.isRiding, carrying: game.foodState }); }
+    remotePlayers.sync(net.remotes(), dt);
+    mpStatusT += dt;
+    if (mpStatusT >= 0.5) { mpStatusT = 0; if (net.connected) hud.setMultiplayer(net.name, net.online); }
+  }
+
   composer.render();
 }
 
@@ -422,7 +440,7 @@ hud.onStart(() => {
 
 if (new URLSearchParams(location.search).get('dev')) {
   window.__demo = { game, avatar, bike, mount, needs, traffic, dayNight, world, hud, camera, orbitCam: followCam,
-    STATES, FOOD, TUNING, setFreeze: (v) => { freezeCam = v; }, setLock: (v) => { lockMode = v; }, get input() { return input; } };
+    net, remotePlayers, STATES, FOOD, TUNING, setFreeze: (v) => { freezeCam = v; }, setLock: (v) => { lockMode = v; }, get input() { return input; } };
 }
 
 boot();

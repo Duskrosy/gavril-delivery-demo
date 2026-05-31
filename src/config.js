@@ -134,6 +134,11 @@ export const TUNING = {
   dayStart:        0.78, // begin at dusk/late-evening
 };
 
+// --- Multiplayer -----------------------------------------------------------
+// Leave url empty for single-player. Set it to your relay server's wss:// URL
+// (or pass ?server=wss://… in the page URL) to go multiplayer. See server/.
+export const MULTIPLAYER = { url: '' };
+
 // --- Roblox-style orbit camera ---------------------------------------------
 export const CAMERA = {
   sens:      0.0042,   // radians per pixel of mouse movement

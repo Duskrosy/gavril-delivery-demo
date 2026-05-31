@@ -146,6 +146,17 @@ kbd{
 .carry-chip.damaged{ background:var(--reward); }
 .carry-chip.destroyed{ background:var(--decision); color:var(--ink); }
 
+/* multiplayer status */
+.mp{
+  position:absolute; top:22px; right:24px; display:flex; align-items:center; gap:8px;
+  font-family:var(--mono); font-size:12.5px; letter-spacing:.08em; color:var(--ink-dim);
+  background:color-mix(in oklab, var(--panel) 82%, transparent);
+  border:1px solid var(--line); border-radius:999px; padding:8px 14px;
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+.mp-dot{ width:8px; height:8px; border-radius:50%; background:var(--reward); box-shadow:0 0 10px var(--reward); }
+.mp b{ color:var(--ink); font-weight:700; }
+
 /* contextual prompt */
 .prompt{
   position:absolute; left:50%; bottom:150px; transform:translateX(-50%);

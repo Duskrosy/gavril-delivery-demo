@@ -82,11 +82,15 @@ async function run(){
   await tp(page,'rest'); await wait(300);
   R.carryingAfterPickup = await page.evaluate(()=>window.__demo.game.foodState);
 
-  // forced crash
-  await page.evaluate(()=>{ const {bike,traffic}=window.__demo; const c=traffic.cars[0];
-    bike.mesh.position.set(c._wx,0,c._wz); bike.speed=26; bike.headingVec.set(0,0,c.dir>0?-1:1); });
-  await wait(250);
-  R.foodAfterCrash = await page.evaluate(()=>window.__demo.game.foodState);
+  // forced crash — retry against fresh (moving) car positions until it lands
+  R.foodAfterCrash = await page.evaluate(async ()=>{ const {bike,traffic,game}=window.__demo;
+    for (let k=0; k<25 && game.foodState!=='destroyed'; k++){
+      const c = traffic.cars[k % traffic.cars.length];
+      bike.mesh.position.set(c._wx, 0, c._wz); bike.speed = 26;
+      bike.headingVec.set(c.axis==='z' ? 0 : (c.dir>0?-1:1), 0, c.axis==='z' ? (c.dir>0?-1:1) : 0);
+      await new Promise(r=>setTimeout(r,90));
+    }
+    return game.foodState; });
   await shot(page,'p2-crash.png');
   // remake
   await tp(page,'rest'); await wait(300);
