@@ -48,12 +48,27 @@ async function run(){
   R.carCount = await page.evaluate(()=>window.__demo.traffic.cars.length);
   R.lightAxis = await page.evaluate(()=>typeof window.__demo.traffic.light.goAxis);
   R.vehicleKinds = await page.evaluate(()=>[...new Set(window.__demo.traffic.cars.map(c=>c.kind))].sort());
-  // anti-deadlock: after a warm-up, most cars should keep flowing (a few wait
-  // at the light / queue). Measures net travel over a steady-state window.
-  R.carsMoving = await page.evaluate(async ()=>{ const cars=window.__demo.traffic.cars;
-    await new Promise(r=>setTimeout(r,2500)); // warm up out of the cold start
-    const before=cars.map(c=>c.along); await new Promise(r=>setTimeout(r,2000));
-    return cars.filter((c,i)=>Math.abs(c.along-before[i])>4).length; });
+  // anti-deadlock: park the player far away (so cars don't yield to it), then
+  // count cars that travel over a window long enough that the light cycles
+  // green for every approach. Uses world position (robust to turns/wraps).
+  R.carsMoving = await page.evaluate(async ()=>{ const {traffic,bike}=window.__demo; const cars=traffic.cars;
+    bike.mesh.position.set(108,0,108);
+    const before=cars.map(c=>({x:c._wx,z:c._wz}));
+    await new Promise(r=>setTimeout(r,8000));
+    return cars.filter((c,i)=>Math.hypot(c._wx-before[i].x, c._wz-before[i].z) > 8).length; });
+
+  // orbit camera responds to look + zoom
+  R.orbitCam = await page.evaluate(()=>{ const c=window.__demo.orbitCam;
+    const y0=c.yaw; c.addLook(120,40); const looked=Math.abs(c.yaw-y0)>0.1 && c.pitch!==undefined;
+    const d0=c.targetDist; c.zoom(5); return looked && c.targetDist!==d0; });
+  // driver personalities + NPC agents present
+  R.aggrCount = await page.evaluate(()=>window.__demo.traffic.cars.filter(c=>c.aggressive).length);
+  R.haterCount = await page.evaluate(()=>window.__demo.traffic.cars.filter(c=>c.hatesBikes).length);
+  R.agentCount = await page.evaluate(()=>window.__demo.world.agentSolids().length);
+  // pedestrian/agent collision pushes the player out
+  R.pedPush = await page.evaluate(async ()=>{ const {bike,world}=window.__demo; const a=world.agentSolids()[0];
+    bike.mesh.position.set(a.x,0,a.z); await new Promise(r=>setTimeout(r,200));
+    return Math.hypot(bike.position.x-a.x, bike.position.z-a.z) > 1; });
 
   // clock in at the hub
   await tp(page,'hub'); await wait(200);
@@ -120,7 +135,8 @@ async function run(){
   console.log('page errors'.padEnd(20),':', errors.length?errors:'none');
   const ok = R.startMode==='ON FOOT' && R.startOffShift==='OFF_SHIFT' && R.riding===true &&
     R.canPushEmpty===true && R.pushVisual===true && R.carCount===26 && R.lightAxis==='string' &&
-    R.vehicleKinds.includes('car') && R.vehicleKinds.length>=2 && R.carsMoving>=14 &&
+    R.vehicleKinds.includes('car') && R.vehicleKinds.length>=2 && R.carsMoving>=20 &&
+    R.orbitCam===true && R.aggrCount>=1 && R.haterCount>=1 && R.agentCount>=38 && R.pedPush===true &&
     R.clockedIn===true && R.stateAfterClockIn==='OFFER' && R.carryingAfterPickup==='fresh' &&
     R.foodAfterCrash==='destroyed' && R.foodAfterRemake==='fresh' && R.gasRose===true &&
     R.hungerAfterEat>95 && R.pushedOut===true && R.dayNightChanges===true &&

@@ -22,6 +22,9 @@ Or any static server (`npx serve`, etc.).
 You start **on foot** as a blocky avatar, off-shift. You can run deliveries on foot, or ride.
 
 - **W A S D / arrows** — move (walk on foot, drive on the bike)
+- **Right-click + drag** — orbit the camera around you · **mouse wheel** — zoom
+- **Ctrl** — toggle shift-lock (pointer-locked camera; on foot you face the camera
+  and move camera-relative, Roblox-style)
 - **F** — walk up to the parked motorcycle and press F to ride; F again to hop off
 - **E** — **clock in** at the restaurant (no orders arrive until you do), accept an
   offered order, or eat when standing by the restaurant / a food stand
@@ -39,10 +42,14 @@ Midday → Dinner → Late-night), shown in the HUD.
 - **Hunger** (gold meter): drains slowly. Low hunger slows you down. **Eat** at the
   restaurant or a food stand (press **E**) to top up — free.
 - **Traffic**: cars, **vans, and buses** drive the grid with varied speeds/behavior,
-  **turn at intersections**, **brake for you** and for each other, and **stop at the
-  traffic light** (both approaches). A minor knock **shakes**
-  the food (smaller tip); a real **crash destroys** it — ride back for a free remake.
-  **Speed bumps** jolt and slow you. Pedestrians **wander** the city.
+  **brake for you** and for each other (car-following), and **stop at the traffic light**
+  (both approaches). Some drivers are **aggressive** and a few **despise motorcycles** —
+  they won't yield to the rider and will surge. A minor knock **shakes** the food (smaller
+  tip); a real **crash destroys** it — ride back for a free remake. **Speed bumps** jolt you.
+- **People**: pedestrians **wander** the city and you **collide** with them, plus **NPC
+  delivery riders** — some weaving the streets on scooters, others hanging out / eating at
+  the food stands and restaurant.
+- **Camera**: Roblox-style orbit — right-drag or **Ctrl shift-lock** to look around, wheel to zoom.
 
 ## Tests (logic only, headless)
 

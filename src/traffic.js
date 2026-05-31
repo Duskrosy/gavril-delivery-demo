@@ -143,18 +143,20 @@ class TrafficLightCtrl {
 export class Traffic {
   constructor(scene, lightRefs) {
     const lines = gridLines();
+    // every distinct lane (line × axis × direction) so cars don't spawn stacked
+    const lanes = [];
+    for (const line of lines) for (const axis of ['z', 'x']) for (const dir of [1, -1]) lanes.push({ line, axis, dir });
     this.cars = [];
     let seed = 1337;
     const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
     let i = 0;
     const lerp = (a, b, t) => a + (b - a) * t;
     while (this.cars.length < TUNING.carCount && i < 400) {
-      const line = lines[i % lines.length];
-      const axis = (i % 2 === 0) ? 'z' : 'x';
+      const lane = lanes[i % lanes.length];
       const type = pickType(rnd());
       const color = type.kind === 'bus' ? BUS_COLORS[this.cars.length % BUS_COLORS.length] : CAR_COLORS[this.cars.length % CAR_COLORS.length];
       const car = {
-        axis, line, dir: rnd() > 0.5 ? 1 : -1, along: (rnd() * 2 - 1) * (WORLD.half - 12),
+        axis: lane.axis, line: lane.line, dir: lane.dir, along: (rnd() * 2 - 1) * (WORLD.half - 12),
         speed: 0, kind: type.kind, halfW: type.w / 2, halfL: type.l / 2,
         speedFactor: lerp(type.speed[0], type.speed[1], rnd()),
         turnChance: lerp(type.turn[0], type.turn[1], rnd()),
@@ -162,8 +164,17 @@ export class Traffic {
         accelF: lerp(type.accel[0], type.accel[1], rnd()),
         _lastTurn: null, mesh: type.make(color),
       };
+      // personality: some drivers are fast & pushy
+      if (rnd() < TUNING.aggressiveChance) {
+        car.aggressive = true;
+        car.speedFactor = lerp(TUNING.aggressiveSpeed[0], TUNING.aggressiveSpeed[1], rnd());
+        car.yieldDist *= 0.6; car.accelF *= 1.4; car.turnChance *= 0.6;
+      }
+      // some drivers despise motorcycles and won't yield to the rider
+      car.hatesBikes = rnd() < TUNING.bikeHaterChance;
       scene.add(car.mesh);
       this.cars.push(car);
+      i++;
     }
     this.light = new TrafficLightCtrl(lightRefs);
     this.lines = lines;
@@ -181,8 +192,9 @@ export class Traffic {
     }
   }
 
-  // playerPos: THREE.Vector3 (cars yield to the player)
-  update(dt, playerPos) {
+  // playerPos: THREE.Vector3 (cars yield to the player); playerRiding lets
+  // motorcycle-haters refuse to yield (and surge) when you're on the bike.
+  update(dt, playerPos, playerRiding) {
     this.light.update(dt);
     const T = TUNING, half = WORLD.half, step = WORLD.blockSpacing;
 
@@ -204,18 +216,26 @@ export class Traffic {
         return lat < latMax ? ahead : -1;
       };
 
-      // yield to the player if they're in the lane ahead
+      // yield to the player if they're in the lane ahead — unless this driver
+      // despises motorcycles and you're riding, in which case they surge.
       if (playerPos) {
         const d = aheadDist(playerPos.x, playerPos.z, 3.0);
-        if (d > 0 && d < car.yieldDist + car.halfL + 2) target = 0;
-      }
-      // yield to the nearest car ahead in the same lane
-      if (target > 0) {
-        for (const o of this.cars) {
-          if (o === car) continue;
-          const d = aheadDist(o._w.x, o._w.z, 2.4);
-          if (d > 0 && d < car.yieldDist + car.halfL + o.halfL) { target = 0; break; }
+        if (d > 0 && d < car.yieldDist + car.halfL + 2) {
+          if (playerRiding && car.hatesBikes) target = T.carSpeed * car.speedFactor * 1.15;
+          else target = 0;
         }
+      }
+      // car-following: ease toward the gap to the nearest car in the SAME lane
+      // ahead (same road, axis and direction). Only same-lane — otherwise
+      // perpendicular cars at a junction mutually yield and freeze (gridlock).
+      if (target > 0) {
+        let gap = Infinity;
+        for (const o of this.cars) {
+          if (o === car || o.axis !== car.axis || o.line !== car.line || o.dir !== car.dir) continue;
+          const d = aheadDist(o._w.x, o._w.z, 2.4);
+          if (d > 0) { const g = d - car.halfL - o.halfL; if (g < gap) gap = g; }
+        }
+        if (gap < Infinity) target = Math.min(target, Math.max(0, (gap - 2.2) * 1.7));
       }
       // obey the one traffic light on both its approaches
       const ctrlZ = car.axis === 'z' && car.line === 0;
@@ -237,22 +257,10 @@ export class Traffic {
       // advance
       car.along += car.dir * car.speed * dt;
 
-      // turn at intersections (keeps traffic from being static)
-      const g = Math.round(car.along / step) * step;
-      if (Math.abs(g) < half - 1 && Math.abs(car.along - g) < 1.0 && car._lastTurn !== g && car.speed > 1) {
-        car._lastTurn = g;
-        if (Math.random() < car.turnChance) {
-          const oldLine = car.line;
-          car.axis = car.axis === 'z' ? 'x' : 'z';
-          car.line = g;
-          car.dir = Math.random() < 0.5 ? 1 : -1;
-          car.along = oldLine;
-        }
-      }
-
-      // wrap at the map edge
-      if (car.along > half) { car.along -= 2 * half; car._lastTurn = null; }
-      else if (car.along < -half) { car.along += 2 * half; car._lastTurn = null; }
+      // wrap around the map edge (cars loop their road — no turning, which
+      // otherwise funnels and traps cars into a permanent jam)
+      if (car.along > half) car.along -= 2 * half;
+      else if (car.along < -half) car.along += 2 * half;
     }
 
     this._place();

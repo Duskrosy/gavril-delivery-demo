@@ -12,7 +12,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { ORDERS, CUSTOMERS, TUNING, SPAWN, WORLD, PALETTE, SPEED_BUMPS, customerById } from './config.js';
+import { ORDERS, CUSTOMERS, TUNING, SPAWN, WORLD, PALETTE, SPEED_BUMPS, CAMERA, customerById } from './config.js';
 import { GameState, STATES } from './game.js';
 import { FOOD } from './rules.js';
 import { Needs } from './needs.js';
@@ -24,15 +24,11 @@ import { Avatar } from './avatar.js';
 import { Mount } from './mount.js';
 import { Traffic } from './traffic.js';
 import { DayNight } from './daynight.js';
-import { FollowCam } from './camera.js';
+import { OrbitCam } from './camera.js';
 import { HUD } from './ui.js';
 
 const joinedOrders = ORDERS.map(o => ({ ...o, customer: customerById(o.customerId) }));
 const FOOD_COLOR = { [FOOD.FRESH]: PALETTE.action, [FOOD.DAMAGED]: PALETTE.reward, [FOOD.DESTROYED]: PALETTE.decision };
-const CAM = {
-  foot: { dist: TUNING.footCamDist, height: TUNING.footCamHeight, look: TUNING.footCamLook, lerp: TUNING.footCamLerp },
-  bike: { dist: TUNING.camDist, height: TUNING.camHeight, look: TUNING.camLook, lerp: TUNING.camLerp },
-};
 const FOOT_R = 1.3, BIKE_R = 1.9;
 const ROAD_HALF = (WORLD.roadWidth ?? 12) / 2;
 
@@ -60,7 +56,7 @@ composer.addPass(new OutputPass());
 const world = buildWorld(scene);
 const avatar = new Avatar(scene, SPAWN.foot);
 const bike = new Player(scene, SPAWN.bike);
-const followCam = new FollowCam(camera);
+const followCam = new OrbitCam(camera);
 const mount = new Mount(avatar, bike, followCam);
 const traffic = new Traffic(scene, world.trafficLight);
 const dayNight = new DayNight({ scene, ...world.lights });
@@ -77,6 +73,10 @@ let lastPhase = '';
 let pushing = false;
 let lastPushing = false;
 let freezeCam = false; // dev/aerial capture only
+let rmb = false;          // right mouse held (orbit)
+let lockMode = false;     // Ctrl shift-lock (pointer locked)
+let pointerLocked = false;
+let camLastRiding = false;
 
 // --- input ------------------------------------------------------------------
 const input = { forward: false, back: false, left: false, right: false };
@@ -90,6 +90,26 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') tryAction();
 });
 addEventListener('keyup', (e) => { if (KEYMAP[e.code]) { input[KEYMAP[e.code]] = false; e.preventDefault(); } });
+
+// --- Roblox camera input: right-drag orbit, Ctrl shift-lock, wheel zoom ----
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('mousedown', (e) => { if (e.button === 2) rmb = true; });
+addEventListener('mouseup', (e) => { if (e.button === 2) rmb = false; });
+addEventListener('mousemove', (e) => {
+  if (rmb || pointerLocked) followCam.addLook(e.movementX || 0, e.movementY || 0);
+});
+canvas.addEventListener('wheel', (e) => { followCam.zoom(Math.sign(e.deltaY) * CAMERA.zoomStep); e.preventDefault(); }, { passive: false });
+addEventListener('keydown', (e) => {
+  if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !e.repeat) {
+    lockMode = !lockMode;
+    try { if (lockMode) canvas.requestPointerLock?.(); else document.exitPointerLock?.(); } catch {}
+    e.preventDefault();
+  }
+});
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvas;
+  if (!pointerLocked) lockMode = false;
+});
 
 const noInput = { forward: false, back: false, left: false, right: false };
 const dist2 = (a, p) => Math.hypot(a.x - p.x, a.z - p.z);
@@ -314,12 +334,17 @@ function tick() {
   dayNight.update(dt);
   bloom.strength = dayNight.bloom;
   world.update(dt);
-  traffic.update(dt, mount.body.position);
+  traffic.update(dt, mount.body.position, mount.isRiding);
 
   pushing = mount.isRiding && needs.engineCut;
   const ctrl = active ? input : noInput;
-  if (mount.isRiding) body.update(dt, ctrl, { speedMult: needs.bikeSpeedMult, engineCut: needs.engineCut, push: pushing });
-  else body.update(dt, ctrl, { speedMult: needs.moveSpeedMult });
+  if (mount.isRiding) {
+    body.update(dt, ctrl, { speedMult: needs.bikeSpeedMult, engineCut: needs.engineCut, push: pushing });
+  } else if (lockMode) {
+    body.updateLocked(dt, ctrl, followCam.yaw, { speedMult: needs.moveSpeedMult }); // shift-lock: camera-relative
+  } else {
+    body.update(dt, ctrl, { speedMult: needs.moveSpeedMult });
+  }
   updatePushVisual(dt);
 
   const r = mount.isRiding ? BIKE_R : FOOT_R;
@@ -331,9 +356,10 @@ function tick() {
     handleCarImpact(dt, r);              // detect overlaps BEFORE push-out
   }
 
-  // solid push-out: cannot pass through buildings or cars
+  // solid push-out: cannot pass through buildings, cars, or people
   resolveSolids(body.position, r, world.solids);
   resolveSolids(body.position, r, traffic.solidBoxes());
+  resolveSolids(body.position, r, world.agentSolids());
 
   if (active) {
     handleBumps(dt);
@@ -352,7 +378,13 @@ function tick() {
     hud.setPrompt('');
   }
 
-  if (!freezeCam) followCam.follow(body.position, body.headingVec, dt, mount.isRiding ? CAM.bike : CAM.foot);
+  // camera: zoom base follows mode (foot vs bike), orbit handles the rest
+  if (mount.isRiding !== camLastRiding) {
+    followCam.setBaseDist(mount.isRiding ? CAMERA.distBike : CAMERA.distFoot);
+    camLastRiding = mount.isRiding;
+  }
+  followCam.manual = rmb || pointerLocked;
+  if (!freezeCam) followCam.update(body.position, body.yaw, dt, Math.abs(body.speed) > 1);
 
   // HUD reflections
   hud.setNeeds({ gasPct: needs.gasPct, hungerPct: needs.hungerPct, lowGas: needs.lowGas, lowHunger: needs.lowHunger });
@@ -389,8 +421,8 @@ hud.onStart(() => {
 });
 
 if (new URLSearchParams(location.search).get('dev')) {
-  window.__demo = { game, avatar, bike, mount, needs, traffic, dayNight, world, hud, camera, STATES, FOOD, TUNING,
-    setFreeze: (v) => { freezeCam = v; }, get input() { return input; } };
+  window.__demo = { game, avatar, bike, mount, needs, traffic, dayNight, world, hud, camera, orbitCam: followCam,
+    STATES, FOOD, TUNING, setFreeze: (v) => { freezeCam = v; }, setLock: (v) => { lockMode = v; }, get input() { return input; } };
 }
 
 boot();

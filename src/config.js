@@ -74,17 +74,17 @@ export const TUNING = {
   eatRadius:     11,
   ordersPerShift: 3,
 
-  // needs — pace governors (gentle; never fail states)
+  // needs — pace governors (very forgiving; never fail states)
   gasMax:        100,
-  gasDrainPerSec: 2.2,   // while the bike is moving (much gentler now)
-  gasLow:        20,     // below this, speed eases off
-  gasLowSpeedMult: 0.7,  // speed multiplier when low on gas
-  gasPushMult:   0.22,   // out of gas → you can still push the bike at a crawl
-  refuelPerSec:  70,     // ~1.5s to fill at a station
+  gasDrainPerSec: 1.0,   // while the bike is moving — a long, easy tank
+  gasLow:        15,     // below this, speed eases off a little
+  gasLowSpeedMult: 0.78, // speed multiplier when low on gas
+  gasPushMult:   0.24,   // out of gas → you can still push the bike at a crawl
+  refuelPerSec:  80,     // tops up fast
   hungerMax:     100,
-  hungerDrainPerSec: 0.7, // gentler
-  hungerLow:     30,
-  hungerMinMult: 0.6,    // slowest you move when starving
+  hungerDrainPerSec: 0.32, // very slow
+  hungerLow:     22,
+  hungerMinMult: 0.72,   // only a mild slowdown when starving
 
   // collision impact thresholds (relative speed, world-units/sec) — softened
   impactMinor:   8,      // above this a hit damages the food
@@ -108,10 +108,21 @@ export const TUNING = {
   carTurnChance: 0.4,    // probability of turning (vs. straight) at an intersection
   lightCycle:    { green: 6.5, yellow: 1.8, red: 6.5 }, // per phase, per axis
 
-  // pedestrians
-  pedCount:      14,
+  // driver personalities
+  aggressiveChance: 0.28,   // fraction of drivers who are fast & pushy
+  aggressiveSpeed: [1.4, 1.8],
+  bikeHaterChance: 0.22,    // drivers who refuse to yield to the rider (and surge)
+
+  // pedestrians (now solid)
+  pedCount:      30,
   pedSpeed:      3.2,
+  pedRadius:     0.85,
   pedTurnEvery:  [2.5, 6],  // seconds between heading changes (min,max)
+
+  // NPC delivery riders
+  courierRoam:   5,         // scooter couriers wandering the city
+  courierHang:   6,         // couriers idling / eating at spots
+  courierSpeed:  6.5,
 
   // clock-in / shift
   clockInRadius: 12,
@@ -119,6 +130,22 @@ export const TUNING = {
   // day/night
   dayCycleSeconds: 210,  // full Morning→…→Late-night→Morning loop
   dayStart:        0.78, // begin at dusk/late-evening
+};
+
+// --- Roblox-style orbit camera ---------------------------------------------
+export const CAMERA = {
+  sens:      0.0042,   // radians per pixel of mouse movement
+  invertY:   false,
+  pitchMin:  0.14,     // radians above horizon (don't dip below ground)
+  pitchMax:  1.30,     // near top-down
+  pitch0:    0.42,     // resting pitch
+  distFoot:  11,
+  distBike:  15,
+  distMin:   6,
+  distMax:   34,
+  zoomStep:  2.2,
+  trail:     2.6,      // how fast the camera eases behind you when moving
+  lookY:     2.2,      // look-at height above the target
 };
 
 // --- city props ------------------------------------------------------------

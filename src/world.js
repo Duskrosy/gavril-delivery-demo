@@ -413,6 +413,40 @@ function makePedestrian(colorHex) {
   return g;
 }
 
+// --- NPC delivery couriers --------------------------------------------------
+// A rider on a little scooter (roaming the city).
+function makeCourier(colorHex) {
+  const g = new THREE.Group();
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.2, 1.8),
+    new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .5, metalness: .2 }));
+  deck.position.y = 0.55; deck.castShadow = true; g.add(deck);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8), new THREE.MeshStandardMaterial({ color: C('#221a30') }));
+  col.position.set(0, 1.1, 0.8); col.rotation.x = -0.2; g.add(col);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.7, 8), new THREE.MeshStandardMaterial({ color: C('#221a30') }));
+  bar.position.set(0, 1.6, 0.75); bar.rotation.z = Math.PI / 2; g.add(bar);
+  const tire = new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .95 });
+  for (const z of [0.8, -0.8]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.22, 14), tire); w.rotation.z = Math.PI / 2; w.position.set(0, 0.45, z); g.add(w); }
+  const cloth = new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .7, emissive: C(colorHex), emissiveIntensity: .08 });
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.6, 4, 8), cloth); torso.position.set(0, 1.5, -0.1); torso.rotation.x = 0.2; torso.castShadow = true; g.add(torso);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 12), new THREE.MeshStandardMaterial({ color: C('#1b1428'), roughness: .4, metalness: .2 })); helmet.position.set(0, 2.05, 0.05); g.add(helmet);
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), new THREE.MeshStandardMaterial({ color: C(PALETTE.panel2), emissive: C(PALETTE.reward), emissiveIntensity: .5, roughness: .5 })); box.position.set(0, 1.7, -0.7); g.add(box);
+  g.scale.setScalar(0.85);
+  return g;
+}
+
+// A courier standing/eating at a spot (with a delivery box on their back).
+function makeHangoutNPC(colorHex) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.6), new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .8 }));
+  body.position.y = 1.4; body.castShadow = true; g.add(body);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshStandardMaterial({ color: C('#d7b0ec'), roughness: .8 }));
+  head.position.y = 2.45; g.add(head);
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.5), new THREE.MeshStandardMaterial({ color: C(PALETTE.panel2), emissive: C(PALETTE.reward), emissiveIntensity: .4 }));
+  box.position.set(0, 1.5, -0.45); g.add(box);
+  g.scale.setScalar(0.9);
+  return g;
+}
+
 // ===========================================================================
 export function buildWorld(scene) {
   scene.background = C(PALETTE.bg);
@@ -585,6 +619,33 @@ export function buildWorld(scene) {
   }
   const PED_LIM = WORLD.half - 6;
 
+  // roaming NPC delivery couriers (scooters weaving the city)
+  const courierColors = ['#ff8ec8', '#6fd2e6', '#ffc864', '#b58cff', '#8de0b0'];
+  const couriers = [];
+  for (let i = 0; i < (TUNING.courierRoam ?? 4); i++) {
+    const obj = makeCourier(courierColors[i % courierColors.length]);
+    const x = (Math.random() * 2 - 1) * (WORLD.half - 14);
+    const z = (Math.random() * 2 - 1) * (WORLD.half - 14);
+    const yaw = Math.random() * Math.PI * 2;
+    obj.position.set(x, 0, z); obj.rotation.y = yaw; scene.add(obj);
+    couriers.push({ obj, yaw, speed: (TUNING.courierSpeed ?? 6) * (0.8 + Math.random() * 0.4), turnIn: 1 + Math.random() * 4 });
+  }
+
+  // couriers idling / eating at spots (food stands + the restaurant)
+  const hangouts = [];
+  const hangSpots = [...foodStands.map(s => s.position3), new THREE.Vector3(WORLD.restaurant.position.x, 0, WORLD.restaurant.position.z)];
+  const perSpot = Math.ceil((TUNING.courierHang ?? 6) / hangSpots.length);
+  for (const spot of hangSpots) {
+    for (let k = 0; k < perSpot && hangouts.length < (TUNING.courierHang ?? 6); k++) {
+      const obj = makeHangoutNPC(courierColors[hangouts.length % courierColors.length]);
+      const a = Math.random() * Math.PI * 2, rr = 5 + Math.random() * 3;
+      obj.position.set(spot.x + Math.cos(a) * rr, 0, spot.z + Math.sin(a) * rr);
+      obj.rotation.y = Math.random() * Math.PI * 2;
+      scene.add(obj);
+      hangouts.push({ obj, phase: Math.random() * 10 });
+    }
+  }
+
   // waypoint marker
   const marker = makeMarker();
   scene.add(marker);
@@ -621,6 +682,27 @@ export function buildWorld(scene) {
       p.ped.rotation.y = p.yaw;
       p.ped.position.y = Math.abs(Math.sin((t + p.phase) * 6)) * 0.13; // walk bob
     }
+
+    // roaming couriers wander faster, like peds on scooters
+    for (const c of couriers) {
+      c.turnIn -= dt;
+      if (c.turnIn <= 0) { c.yaw += (Math.random() - 0.5) * Math.PI * 0.7; c.turnIn = 2 + Math.random() * 4; }
+      const hx = Math.sin(c.yaw), hz = Math.cos(c.yaw);
+      c.obj.position.x += hx * c.speed * dt;
+      c.obj.position.z += hz * c.speed * dt;
+      if (Math.abs(c.obj.position.x) > PED_LIM || Math.abs(c.obj.position.z) > PED_LIM) {
+        c.yaw += Math.PI;
+        c.obj.position.x = Math.max(-PED_LIM, Math.min(PED_LIM, c.obj.position.x));
+        c.obj.position.z = Math.max(-PED_LIM, Math.min(PED_LIM, c.obj.position.z));
+      }
+      c.obj.rotation.y = c.yaw;
+    }
+
+    // idling couriers sway/bob in place
+    for (const h of hangouts) {
+      h.obj.position.y = Math.abs(Math.sin((t + h.phase) * 2)) * 0.06;
+      h.obj.rotation.y += Math.sin((t + h.phase) * 0.5) * dt * 0.3;
+    }
   }
 
   return {
@@ -634,6 +716,15 @@ export function buildWorld(scene) {
     trafficLight,
     marker,
     solids,
+    // moving NPCs (peds + couriers) as small circular solids for collision
+    agentSolids: () => {
+      const R = TUNING.pedRadius ?? 0.85;
+      const out = [];
+      for (const p of peds) out.push({ x: p.ped.position.x, z: p.ped.position.z, hx: R, hz: R });
+      for (const c of couriers) out.push({ x: c.obj.position.x, z: c.obj.position.z, hx: 1.1, hz: 1.1 });
+      for (const h of hangouts) out.push({ x: h.obj.position.x, z: h.obj.position.z, hx: 0.9, hz: 0.9 });
+      return out;
+    },
     lights: { hemi, key, fill, ambient },
     update,
   };

@@ -90,6 +90,38 @@ export class Avatar {
     this.speed = 0;
   }
 
+  // Shift-lock movement: face the camera, move camera-relative (W/S forward,
+  // A/D strafe). camYaw is the camera's yaw; opts.speedMult scales speed.
+  updateLocked(dt, input, camYaw, opts = {}) {
+    const T = TUNING;
+    const top = T.footSpeed * (opts.speedMult ?? 1);
+    this.yaw = camYaw;
+    const fwd = { x: Math.sin(camYaw), z: Math.cos(camYaw) };
+    const rgt = { x: Math.cos(camYaw), z: -Math.sin(camYaw) };
+    let mx = 0, mz = 0;
+    if (input.forward) { mx += fwd.x; mz += fwd.z; }
+    if (input.back) { mx -= fwd.x; mz -= fwd.z; }
+    if (input.right) { mx += rgt.x; mz += rgt.z; }
+    if (input.left) { mx -= rgt.x; mz -= rgt.z; }
+    const len = Math.hypot(mx, mz);
+    if (len > 0) {
+      mx /= len; mz /= len;
+      this.speed = Math.min(top, this.speed + T.footAccel * dt);
+      this.mesh.position.x += mx * this.speed * dt;
+      this.mesh.position.z += mz * this.speed * dt;
+    } else {
+      this.speed = Math.max(0, this.speed - T.footFriction * dt);
+    }
+    this.headingVec.set(fwd.x, 0, fwd.z);
+    this.mesh.rotation.y = this.yaw;
+    const sp = Math.min(1, this.speed / T.footSpeed);
+    this._t += dt * (6 + sp * 6);
+    const sw = Math.sin(this._t) * 0.5 * sp;
+    this.parts.legL.rotation.x = sw; this.parts.legR.rotation.x = -sw;
+    this.parts.armL.rotation.x = -sw; this.parts.armR.rotation.x = sw;
+    this.mesh.position.y = Math.abs(Math.sin(this._t)) * 0.12 * sp;
+  }
+
   // Drive the walk cycle without moving (used when pushing the bike on foot).
   animateWalk(dt, intensity = 1) {
     this._t += dt * (6 + intensity * 6);
