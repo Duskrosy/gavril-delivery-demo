@@ -1,0 +1,11 @@
+{
+  "name": "gavril-one-shift",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Gavril: One Shift — 3D HTML delivery-rider demo",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python -m http.server 8000"
+  }
+}

@@ -1,0 +1,6 @@
+# dependencies (only needed locally for the headless test harnesses)
+node_modules/
+package-lock.json
+
+# headless-test screenshot artifacts
+tests/*.png

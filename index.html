@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gavril — One Shift</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;1,300;1,400&family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css">
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <canvas id="app"></canvas>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" class="hidden">
+    <!-- top-left stats -->
+    <div class="hud-top">
+      <div class="brand"><span class="brand-name">Gavril</span><span class="brand-tag">ONE&nbsp;SHIFT</span></div>
+      <div class="stats">
+        <div class="stat"><span class="stat-k">SHIFT</span><span class="stat-v" id="stat-clock">Evening</span></div>
+        <div class="stat"><span class="stat-k">CASH</span><span class="stat-v gold" id="stat-cash">$0</span></div>
+        <div class="stat"><span class="stat-k">RATING</span><span class="stat-v" id="stat-rating">★ 5.0</span></div>
+        <div class="stat"><span class="stat-k">ORDER</span><span class="stat-v" id="stat-progress">0 / 3</span></div>
+      </div>
+    </div>
+
+    <!-- objective banner -->
+    <div id="objective" class="objective"></div>
+
+    <!-- directional waypoint -->
+    <div id="waypoint" class="waypoint">
+      <svg viewBox="0 0 48 48" class="wp-arrow"><path d="M24 6 L38 38 L24 30 L10 38 Z"/></svg>
+      <span class="wp-dist" id="wp-dist">0m</span>
+    </div>
+
+    <!-- order card -->
+    <div id="order-card" class="order-card hidden">
+      <div class="oc-thumb"><img id="oc-img" alt=""></div>
+      <div class="oc-body">
+        <div class="oc-kicker">NEW ORDER</div>
+        <div class="oc-food" id="oc-food">—</div>
+        <div class="oc-row"><span class="oc-cust" id="oc-cust">—</span><span class="oc-pay gold" id="oc-pay">$0</span></div>
+        <div class="oc-addr" id="oc-addr">—</div>
+        <button class="btn btn-accept" id="oc-accept">Accept &nbsp;<kbd>E</kbd></button>
+      </div>
+    </div>
+
+    <!-- needs (pace governors) -->
+    <div class="needs">
+      <div class="mode-chip" id="mode-chip"><span class="dot"></span><span id="mode-text">ON FOOT</span></div>
+      <div class="meter" id="meter-gas">
+        <span class="m-label">GAS</span>
+        <div class="m-track"><div class="m-fill" id="fill-gas"></div></div>
+      </div>
+      <div class="meter" id="meter-hunger">
+        <span class="m-label">HUNGER</span>
+        <div class="m-track"><div class="m-fill" id="fill-hunger"></div></div>
+      </div>
+      <div class="carry-chip hidden" id="carry">CARRYING · FRESH</div>
+    </div>
+
+    <!-- contextual prompt (Press F / E …) -->
+    <div id="prompt" class="prompt hidden"></div>
+
+    <!-- transient toast -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <!-- ===================== START ===================== -->
+  <div id="start" class="overlay">
+    <div class="start-card">
+      <div class="kicker">Roblox · Food-Delivery · Vertical Slice</div>
+      <h1 class="title-name">Gavril</h1>
+      <div class="title-sub">ONE&nbsp;SHIFT</div>
+      <p class="lede">Work a real shift, in a fun way — <em>find the house, read the customer, earn the next bike.</em></p>
+      <p class="how">Drive with <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows. Follow the <span class="nav-ink">cyan marker</span> to the restaurant, then to the door. Three orders, one shift.</p>
+      <button class="btn btn-primary" id="start-btn">Clock in ▸</button>
+      <div class="loadnote" id="loadnote">warming up the city…</div>
+    </div>
+  </div>
+
+  <!-- ===================== VIGNETTE (hand-off) ===================== -->
+  <div id="vignette" class="overlay hidden">
+    <div class="vignette-card">
+      <div class="vg-portrait"><img id="vg-img" alt=""></div>
+      <div class="vg-body">
+        <div class="vg-name" id="vg-name">—</div>
+        <p class="vg-line" id="vg-line">—</p>
+        <div class="vg-prompt">How do you hand it over?</div>
+        <div class="vg-choices" id="vg-choices"><!-- buttons injected --></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== PAYOUT ===================== -->
+  <div id="payout" class="overlay hidden">
+    <div class="payout-card">
+      <div class="po-kicker">PAID</div>
+      <div class="po-total gold" id="po-total">$0</div>
+      <div class="po-break" id="po-break">—</div>
+      <div class="po-stars" id="po-stars">★★★★★</div>
+      <button class="btn btn-primary" id="po-continue">Next order ▸</button>
+    </div>
+  </div>
+
+  <!-- ===================== SUMMARY ===================== -->
+  <div id="summary" class="overlay hidden">
+    <div class="summary-card">
+      <div class="kicker">Shift complete</div>
+      <h2 class="sum-title">Nice <em>shift.</em></h2>
+      <div class="sum-grid">
+        <div class="sum-stat"><span class="sum-k">EARNED</span><span class="sum-v gold" id="sum-cash">$0</span></div>
+        <div class="sum-stat"><span class="sum-k">AVG RATING</span><span class="sum-v" id="sum-rating">★ 5.0</span></div>
+        <div class="sum-stat"><span class="sum-k">DELIVERIES</span><span class="sum-v" id="sum-orders">0</span></div>
+      </div>
+      <p class="sum-note">Every shift buys a little more bike. Same time tomorrow?</p>
+      <button class="btn btn-primary" id="sum-replay">Run it back ↺</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
