@@ -89,6 +89,16 @@ export class HUD {
     this.el.prompt.classList.remove('hidden');
   }
 
+  // one-time notice: "You're on singleplayer" + the reason.
+  soloToast(reason) {
+    const t = this.el.toast;
+    t.innerHTML = `You're on singleplayer<span class="sub">${reason}</span>`;
+    t.classList.remove('pop'); t.classList.add('notice');
+    void t.offsetWidth; t.classList.remove('notice'); void t.offsetWidth; t.classList.add('notice');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => t.classList.remove('notice'), 4200);
+  }
+
   // multiplayer status pill (top-right). name=null hides it.
   setMultiplayer(name, online) {
     if (!name) { this.el.mp.classList.add('hidden'); return; }

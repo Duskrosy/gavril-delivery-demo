@@ -95,7 +95,6 @@ export class Avatar {
   updateLocked(dt, input, camYaw, opts = {}) {
     const T = TUNING;
     const top = T.footSpeed * (opts.speedMult ?? 1);
-    this.yaw = camYaw;
     const fwd = { x: Math.sin(camYaw), z: Math.cos(camYaw) };
     const rgt = { x: Math.cos(camYaw), z: -Math.sin(camYaw) };
     let mx = 0, mz = 0;
@@ -109,10 +108,12 @@ export class Avatar {
       this.speed = Math.min(top, this.speed + T.footAccel * dt);
       this.mesh.position.x += mx * this.speed * dt;
       this.mesh.position.z += mz * this.speed * dt;
+      // face the direction we're actually heading (toward the camera/move dir)
+      this.yaw = Math.atan2(mx, mz);
+      this.headingVec.set(mx, 0, mz);
     } else {
       this.speed = Math.max(0, this.speed - T.footFriction * dt);
     }
-    this.headingVec.set(fwd.x, 0, fwd.z);
     this.mesh.rotation.y = this.yaw;
     const sp = Math.min(1, this.speed / T.footSpeed);
     this._t += dt * (6 + sp * 6);

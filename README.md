@@ -22,10 +22,12 @@ Or any static server (`npx serve`, etc.).
 You start **on foot** as a blocky avatar, off-shift. You can run deliveries on foot, or ride.
 
 - **W A S D / arrows** — move (walk on foot, drive on the bike)
-- **Right-click + drag** — orbit the camera around you · **mouse wheel** — zoom
-- **Ctrl** — toggle shift-lock (pointer-locked camera; on foot you face the camera
-  and move camera-relative, Roblox-style)
+- **Right-click + drag** — orbit the camera; while held, on foot your character
+  turns to face the camera and moves camera-relative (Roblox-style) · **wheel** — zoom
+- **Ctrl** — toggle shift-lock (same camera-relative movement, hands-free)
 - **F** — walk up to the parked motorcycle and press F to ride; F again to hop off
+- **Mobile / tablet**: on-screen **joystick** (move), **drag** anywhere to look,
+  **RIDE** and **ACT** buttons. Auto-detected.
 - **E** — **clock in** at the restaurant (no orders arrive until you do), accept an
   offered order, or eat when standing by the restaurant / a food stand
 - Follow the **cyan marker** to the hub, the restaurant, then the customer's door.
@@ -50,10 +52,11 @@ Midday → Dinner → Late-night), shown in the HUD.
   riders** weave the roads and hang out at spots, and **points of interest** — plazas, a
   park, food-truck corners — draw little crowds around the city.
 - **Camera**: Roblox-style orbit — right-drag or **Ctrl shift-lock** to look around, wheel to zoom.
-- **Multiplayer** *(optional)*: a tiny single-room relay server (`server/`). Each player
-  gets a **random name + color** and sees everyone else move around with name tags. Add
-  `?server=wss://YOUR-HOST` to the URL (or set `MULTIPLAYER.url` in `config.js`). With no
-  server it's single-player. See `server/README.md` to run/host it.
+- **Multiplayer** *(default)*: a tiny single-room relay server (`server/`). Each player
+  gets a **random name + color** and sees everyone else move with name tags. The client
+  connects to `MULTIPLAYER.url` (config.js) by default; if it can't reach the server it
+  **falls back to single-player** with a toast explaining why. Override per-link with
+  `?server=wss://YOUR-HOST`. See `server/README.md` to run/host it (Render, etc.).
 
 ## Tests (logic only, headless)
 

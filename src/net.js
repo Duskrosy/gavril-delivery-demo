@@ -17,24 +17,41 @@ export class Net {
     this._onWelcome = null;
   }
 
-  connect(onWelcome) {
+  // onWelcome(welcome) fires once we've joined; onFail(reason) fires once if
+  // we can't (no URL, error, closed early, or timeout) → caller falls back to
+  // single-player. Non-blocking: the game stays playable while we try.
+  connect(onWelcome, onFail) {
     this._onWelcome = onWelcome;
-    if (!this.url || typeof WebSocket === 'undefined') return;
+    this.joined = false;
+    let failed = false;
+    const fail = (reason) => { if (!failed && !this.joined) { failed = true; onFail?.(reason); } };
+
+    if (!this.url) { fail('no server set'); return; }
+    if (typeof WebSocket === 'undefined') { fail('this browser has no WebSocket'); return; }
+
+    // nudge the host awake (free hosts sleep) — the request alone wakes it
+    try { fetch(this.url.replace(/^ws/, 'http'), { mode: 'no-cors' }).catch(() => {}); } catch { /* ignore */ }
+
     let ws;
-    try { ws = new WebSocket(this.url); } catch { return; }
+    try { ws = new WebSocket(this.url); } catch { fail('bad server URL'); return; }
     this.ws = ws;
+
+    const timer = setTimeout(() => fail('server didn’t respond (it may be waking up — refresh in a moment)'), 12000);
+
     ws.onopen = () => { this.connected = true; };
     ws.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.t === 'welcome') {
+        clearTimeout(timer);
+        this.joined = true;
         this.selfId = m.id; this.name = m.name; this.color = m.color;
         this._onWelcome?.(m);
       } else if (m.t === 'players') {
         this._snapshot = m.players || [];
       }
     };
-    ws.onclose = () => { this.connected = false; };
-    ws.onerror = () => { /* swallow — stay single-player */ };
+    ws.onclose = () => { this.connected = false; clearTimeout(timer); fail('server unavailable'); };
+    ws.onerror = () => { fail('couldn’t reach the server'); };
   }
 
   send(state) {

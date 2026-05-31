@@ -70,7 +70,10 @@ const hud = new HUD();
 const serverUrl = new URLSearchParams(location.search).get('server') || MULTIPLAYER.url;
 const net = new Net(serverUrl);
 const remotePlayers = new RemotePlayers(scene);
-net.connect((w) => hud.setMultiplayer(w.name, net.online));
+net.connect(
+  (w) => { hud.setMultiplayer(w.name, net.online); hud.toast(`Online · you're ${w.name}`); },
+  (reason) => hud.soloToast(reason),
+);
 let netT = 0, mpStatusT = 0;
 
 let assets = {};
@@ -86,6 +89,7 @@ let rmb = false;          // right mouse held (orbit)
 let lockMode = false;     // Ctrl shift-lock (pointer locked)
 let pointerLocked = false;
 let camLastRiding = false;
+const mobile = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || ('ontouchstart' in window);
 
 // --- input ------------------------------------------------------------------
 const input = { forward: false, back: false, left: false, right: false };
@@ -119,6 +123,40 @@ document.addEventListener('pointerlockchange', () => {
   pointerLocked = document.pointerLockElement === canvas;
   if (!pointerLocked) lockMode = false;
 });
+
+// --- touch controls (mobile / tablet) --------------------------------------
+if (mobile) {
+  document.getElementById('touch').classList.remove('hidden');
+  const stick = document.getElementById('stick');
+  const knob = document.getElementById('knob');
+  let stickId = null;
+  const setStick = (e) => {
+    const r = stick.getBoundingClientRect();
+    let dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+    let dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    knob.style.transform = `translate(${dx * 36}px, ${dy * 36}px)`;
+    input.forward = dy < -0.35; input.back = dy > 0.35;
+    input.left = dx < -0.35; input.right = dx > 0.35;
+  };
+  const clearStick = () => { input.forward = input.back = input.left = input.right = false; knob.style.transform = 'translate(0,0)'; stickId = null; };
+  stick.addEventListener('pointerdown', (e) => { stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* synthetic */ } setStick(e); e.preventDefault(); });
+  stick.addEventListener('pointermove', (e) => { if (e.pointerId === stickId) setStick(e); });
+  stick.addEventListener('pointerup', (e) => { if (e.pointerId === stickId) clearStick(); });
+  stick.addEventListener('pointercancel', (e) => { if (e.pointerId === stickId) clearStick(); });
+
+  const bind = (id, fn) => document.getElementById(id).addEventListener('pointerdown', (e) => { e.preventDefault(); fn(); });
+  bind('btn-ride', tryMount);
+  bind('btn-act', tryAction);
+
+  // camera orbit: one-finger drag on the canvas (empty area)
+  let camId = null, ltx = 0, lty = 0;
+  canvas.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') { camId = e.pointerId; ltx = e.clientX; lty = e.clientY; } });
+  canvas.addEventListener('pointermove', (e) => { if (e.pointerType === 'touch' && e.pointerId === camId) { followCam.addLook(e.clientX - ltx, e.clientY - lty); ltx = e.clientX; lty = e.clientY; } });
+  const endCam = (e) => { if (e.pointerId === camId) camId = null; };
+  canvas.addEventListener('pointerup', endCam);
+  canvas.addEventListener('pointercancel', endCam);
+}
 
 const noInput = { forward: false, back: false, left: false, right: false };
 const dist2 = (a, p) => Math.hypot(a.x - p.x, a.z - p.z);
@@ -347,10 +385,13 @@ function tick() {
 
   pushing = mount.isRiding && needs.engineCut;
   const ctrl = active ? input : noInput;
+  // on foot, move camera-relative (character faces the camera) while shift-lock
+  // is on, right-click is held, or on touch devices — Roblox-style.
+  const camRelative = lockMode || rmb || mobile;
   if (mount.isRiding) {
     body.update(dt, ctrl, { speedMult: needs.bikeSpeedMult, engineCut: needs.engineCut, push: pushing });
-  } else if (lockMode) {
-    body.updateLocked(dt, ctrl, followCam.yaw, { speedMult: needs.moveSpeedMult }); // shift-lock: camera-relative
+  } else if (camRelative) {
+    body.updateLocked(dt, ctrl, followCam.yaw, { speedMult: needs.moveSpeedMult });
   } else {
     body.update(dt, ctrl, { speedMult: needs.moveSpeedMult });
   }

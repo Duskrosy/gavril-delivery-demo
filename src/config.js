@@ -137,7 +137,7 @@ export const TUNING = {
 // --- Multiplayer -----------------------------------------------------------
 // Leave url empty for single-player. Set it to your relay server's wss:// URL
 // (or pass ?server=wss://… in the page URL) to go multiplayer. See server/.
-export const MULTIPLAYER = { url: '' };
+export const MULTIPLAYER = { url: 'wss://gavril-delivery-demo.onrender.com' };
 
 // --- Roblox-style orbit camera ---------------------------------------------
 export const CAMERA = {
