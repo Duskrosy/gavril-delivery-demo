@@ -74,6 +74,8 @@ let started = false;
 let collideCd = 0;
 let bumpCd = 0;
 let lastPhase = '';
+let pushing = false;
+let lastPushing = false;
 
 // --- input ------------------------------------------------------------------
 const input = { forward: false, back: false, left: false, right: false };
@@ -258,11 +260,33 @@ function updateWaypoint() {
 
 function updatePrompt() {
   const body = mount.body;
+  if (pushing && !onGasPad(body)) { hud.setPrompt('Out of gas — push to a <span class="nav-ink">gas station</span>'); return; }
   if (game.state === STATES.OFF_SHIFT && nearClockIn(body)) { hud.setPrompt('Press <kbd>E</kbd> to clock in'); return; }
   if (!mount.isRiding && mount.canMount()) { hud.setPrompt('Press <kbd>F</kbd> to ride'); return; }
   if (mount.isRiding && onGasPad(body) && needs.gas < TUNING.gasMax - 1) { hud.setPrompt('Refueling…'); return; }
   if (nearEat(body) && needs.hunger < TUNING.hungerMax - 1) { hud.setPrompt('Press <kbd>E</kbd> to eat'); return; }
   hud.setPrompt('');
+}
+
+// Out of gas: the rider hops off and drags the bike on foot (walk anim).
+function updatePushVisual(dt) {
+  const rider = bike.mesh.userData.rider;
+  if (pushing !== lastPushing) {
+    lastPushing = pushing;
+    if (pushing) {
+      rider.visible = false; avatar.mesh.visible = true;
+      hud.setMode(true, 'PUSHING'); hud.toast('Out of gas — push it!');
+    } else if (mount.isRiding) {
+      rider.visible = true; avatar.mesh.visible = false;
+      hud.setMode(true, 'RIDING');
+    }
+  }
+  if (pushing) {
+    const back = 2.0;
+    avatar.mesh.position.set(bike.position.x - bike.headingVec.x * back, 0, bike.position.z - bike.headingVec.z * back);
+    avatar.yaw = bike.yaw; avatar.mesh.rotation.y = bike.yaw;
+    avatar.animateWalk(dt, Math.min(1, Math.abs(bike.speed) / 4 + 0.3));
+  }
 }
 
 function updateCarryVisual() {
@@ -287,11 +311,13 @@ function tick() {
   dayNight.update(dt);
   bloom.strength = dayNight.bloom;
   world.update(dt);
-  traffic.update(dt);
+  traffic.update(dt, mount.body.position);
 
+  pushing = mount.isRiding && needs.engineCut;
   const ctrl = active ? input : noInput;
-  if (mount.isRiding) body.update(dt, ctrl, { speedMult: needs.bikeSpeedMult, engineCut: needs.engineCut });
+  if (mount.isRiding) body.update(dt, ctrl, { speedMult: needs.bikeSpeedMult, engineCut: needs.engineCut, push: pushing });
   else body.update(dt, ctrl, { speedMult: needs.moveSpeedMult });
+  updatePushVisual(dt);
 
   const r = mount.isRiding ? BIKE_R : FOOT_R;
 

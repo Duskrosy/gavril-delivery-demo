@@ -74,22 +74,23 @@ export const TUNING = {
   eatRadius:     11,
   ordersPerShift: 3,
 
-  // needs — pace governors (never fail states)
+  // needs — pace governors (gentle; never fail states)
   gasMax:        100,
-  gasDrainPerSec: 5.0,   // while the bike is moving
-  gasLow:        25,     // below this, speed is capped
-  gasLowSpeedMult: 0.55, // speed multiplier when low on gas
+  gasDrainPerSec: 2.2,   // while the bike is moving (much gentler now)
+  gasLow:        20,     // below this, speed eases off
+  gasLowSpeedMult: 0.7,  // speed multiplier when low on gas
+  gasPushMult:   0.22,   // out of gas → you can still push the bike at a crawl
   refuelPerSec:  70,     // ~1.5s to fill at a station
   hungerMax:     100,
-  hungerDrainPerSec: 1.6,
-  hungerLow:     35,
-  hungerMinMult: 0.5,    // slowest you move when starving
+  hungerDrainPerSec: 0.7, // gentler
+  hungerLow:     30,
+  hungerMinMult: 0.6,    // slowest you move when starving
 
-  // collision impact thresholds (relative speed, world-units/sec)
-  impactMinor:   5,      // above this a hit damages the food
-  impactCrash:   13,     // above this a hit destroys the food
+  // collision impact thresholds (relative speed, world-units/sec) — softened
+  impactMinor:   8,      // above this a hit damages the food
+  impactCrash:   17,     // above this a hit destroys the food
   collisionCooldown: 1.2,
-  knockback:     8,
+  knockback:     5,
 
   // speed bumps
   bumpSlowMult:  0.4,    // speed retained when crossing a bump
@@ -99,8 +100,18 @@ export const TUNING = {
 
   // traffic
   carCount:      16,
-  carSpeed:      12,
-  lightCycle:    { green: 6, yellow: 1.6, red: 5 }, // seconds per phase
+  carSpeed:      10,
+  carAccel:      9,      // m/s² toward target speed
+  carBrake:      22,     // m/s² when yielding
+  carLookAhead:  11,     // how far ahead a car watches for obstacles
+  carYieldDist:  4.5,    // brake if an obstacle is within this of the look point
+  carTurnChance: 0.4,    // probability of turning (vs. straight) at an intersection
+  lightCycle:    { green: 6.5, yellow: 1.8, red: 6.5 }, // per phase, per axis
+
+  // pedestrians
+  pedCount:      14,
+  pedSpeed:      3.2,
+  pedTurnEvery:  [2.5, 6],  // seconds between heading changes (min,max)
 
   // clock-in / shift
   clockInRadius: 12,

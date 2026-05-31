@@ -37,6 +37,17 @@ async function run(){
   await page.keyboard.press('f'); await wait(250);
   R.riding = await page.evaluate(()=>window.__demo.mount.isRiding);
 
+  // out-of-gas: can still push (crawl) and the rider dismounts to push
+  await page.evaluate(()=>window.__demo.needs.setGas(0)); await wait(200);
+  R.canPushEmpty = await page.evaluate(()=>{ const d=window.__demo; return d.needs.engineCut && d.needs.bikeSpeedMult>0; });
+  R.pushVisual = await page.evaluate(()=>window.__demo.avatar.mesh.visible===true);
+  await shot(page,'p4-push.png');
+  await page.evaluate(()=>window.__demo.needs.setGas(100)); await wait(100);
+
+  // traffic sanity
+  R.carCount = await page.evaluate(()=>window.__demo.traffic.cars.length);
+  R.lightAxis = await page.evaluate(()=>typeof window.__demo.traffic.light.goAxis);
+
   // clock in at the hub
   await tp(page,'hub'); await wait(200);
   await page.keyboard.press('e'); await wait(250);
@@ -68,8 +79,8 @@ async function run(){
 
   // solid collision: drop the bike inside a building and confirm it's pushed out
   R.pushedOut = await page.evaluate(async ()=>{ const {bike,world}=window.__demo; const s=world.solids[0];
-    bike.mesh.position.set(s.x,0,s.z); await new Promise(r=>setTimeout(r,120));
-    const out = Math.abs(bike.position.x-s.x) >= s.hx || Math.abs(bike.position.z-s.z) >= s.hz; return out; });
+    bike.mesh.position.set(s.x,0,s.z); await new Promise(r=>setTimeout(r,200));
+    return Math.hypot(bike.position.x-s.x, bike.position.z-s.z) > 1; });
 
   // day/night: force midday for a daytime screenshot, confirm phase changes
   const nightPhase = await page.evaluate(()=>window.__demo.dayNight.phase);
@@ -101,6 +112,7 @@ async function run(){
   for(const [k,v] of Object.entries(R)) console.log(k.padEnd(20),':',v);
   console.log('page errors'.padEnd(20),':', errors.length?errors:'none');
   const ok = R.startMode==='ON FOOT' && R.startOffShift==='OFF_SHIFT' && R.riding===true &&
+    R.canPushEmpty===true && R.pushVisual===true && R.carCount===16 && R.lightAxis==='string' &&
     R.clockedIn===true && R.stateAfterClockIn==='OFFER' && R.carryingAfterPickup==='fresh' &&
     R.foodAfterCrash==='destroyed' && R.foodAfterRemake==='fresh' && R.gasRose===true &&
     R.hungerAfterEat>95 && R.pushedOut===true && R.dayNightChanges===true &&

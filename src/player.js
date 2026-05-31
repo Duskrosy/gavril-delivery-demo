@@ -109,12 +109,14 @@ export class Player {
     this.speed *= -0.2; // jolt
   }
 
-  // input: { forward, back, left, right }; opts: { speedMult, engineCut }
+  // input: { forward, back, left, right }; opts: { speedMult, engineCut, push }
+  // push=true means out of gas: the rider drags the bike on foot — throttle
+  // still works (you provide the force) but speedMult crawls it.
   update(dt, input, opts = {}) {
     const T = TUNING;
     const mult = opts.speedMult ?? 1;
     const top = T.maxSpeed * mult;
-    const cut = !!opts.engineCut;
+    const cut = !!opts.engineCut && !opts.push; // pushing lets you still move
 
     if (!cut && input.forward) this.speed += T.accel * dt;
     else if (input.back) this.speed -= T.reverseAccel * dt;

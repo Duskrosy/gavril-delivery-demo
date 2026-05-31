@@ -33,13 +33,15 @@ Midday → Dinner → Late-night), shown in the HUD.
 
 ## Systems (pace governors — never fail states)
 
-- **Gas** (cyan meter): drains while riding. Low gas caps your speed; empty cuts the
-  engine until you refuel. Pull onto a **gas station** pad to fill up automatically.
+- **Gas** (cyan meter): drains gently while riding. Low gas eases your speed; when it
+  runs out the engine cuts but you can **still move — you hop off and push the bike** at a
+  crawl. Pull onto a **gas station** pad to refuel automatically.
 - **Hunger** (gold meter): drains slowly. Low hunger slows you down. **Eat** at the
-  restaurant or the food stand (press **E**) to top up — free.
-- **Traffic & collisions**: cars loop the main roads and obey one **traffic light**.
-  A minor knock **shakes** the food (smaller tip, lower rating); a real **crash destroys**
-  it — ride back to the restaurant for a free remake. **Speed bumps** jolt and slow you.
+  restaurant or a food stand (press **E**) to top up — free.
+- **Traffic**: cars drive the grid, **turn at intersections**, **brake for you** and for
+  each other, and **stop at the traffic light** (both approaches). A minor knock **shakes**
+  the food (smaller tip); a real **crash destroys** it — ride back for a free remake.
+  **Speed bumps** jolt and slow you. Pedestrians **wander** the city.
 
 ## Tests (logic only, headless)
 

@@ -63,9 +63,9 @@ export class HUD {
   }
 
   // --- needs / mode / carry ---------------------------------------------
-  setMode(riding) {
+  setMode(riding, label) {
     this.el.modeChip.classList.toggle('riding', riding);
-    this.el.modeText.textContent = riding ? 'RIDING' : 'ON FOOT';
+    this.el.modeText.textContent = label || (riding ? 'RIDING' : 'ON FOOT');
   }
   setNeeds({ gasPct, hungerPct, lowGas, lowHunger }) {
     this.el.fillGas.style.width = `${Math.max(0, Math.min(1, gasPct)) * 100}%`;

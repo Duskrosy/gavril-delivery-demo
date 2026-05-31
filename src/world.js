@@ -566,23 +566,22 @@ export function buildWorld(scene) {
     scene.add(obj);
   }
 
-  // pedestrians strolling the sidewalks (decorative)
+  // pedestrians — free wanderers that stroll, turn, and roam the whole city
   const pedColors = ['#7da0ff', '#ff8ec8', '#8de0b0', '#ffc864', '#b58cff'];
   const peds = [];
-  const pedRng = makeRng(7);
-  for (let i = 0; i < 9; i++) {
+  const [pedMin, pedMax] = TUNING.pedTurnEvery ?? [2.5, 6];
+  for (let i = 0; i < (TUNING.pedCount ?? 12); i++) {
     const ped = makePedestrian(pedColors[i % pedColors.length]);
-    const axis = pedRng() > .5 ? 'x' : 'z';
-    const line = (Math.floor(pedRng() * 5) - 2) * step + (pedRng() > .5 ? 5.5 : -5.5);
-    const base = (pedRng() - .5) * WORLD.half * 1.4;
-    const range = 8 + pedRng() * 12;
-    const speed = 0.4 + pedRng() * 0.5;
-    const phase = pedRng() * Math.PI * 2;
-    ped.position.set(axis === 'x' ? base : line, 0, axis === 'x' ? line : base);
-    ped.rotation.y = axis === 'x' ? Math.PI / 2 : 0;
+    const x = (Math.random() * 2 - 1) * (WORLD.half - 12);
+    const z = (Math.random() * 2 - 1) * (WORLD.half - 12);
+    const yaw = Math.random() * Math.PI * 2;
+    ped.position.set(x, 0, z);
+    ped.rotation.y = yaw;
     scene.add(ped);
-    peds.push({ ped, axis, line, base, range, speed, phase });
+    peds.push({ ped, yaw, speed: (TUNING.pedSpeed ?? 3) * (0.7 + Math.random() * 0.6),
+      turnIn: 1 + Math.random() * (pedMax - pedMin), phase: Math.random() * 10 });
   }
+  const PED_LIM = WORLD.half - 6;
 
   // waypoint marker
   const marker = makeMarker();
@@ -602,14 +601,23 @@ export function buildWorld(scene) {
     padMat.opacity = 0.28 + Math.sin(t * 3) * 0.14;
     clockPad.scale.setScalar(1 + Math.sin(t * 3) * 0.04);
 
-    // pedestrians oscillate along their segment with a gentle bob
+    // pedestrians wander: walk forward, turn now and then, reflect at bounds
     for (const p of peds) {
-      const d = Math.sin(t * p.speed + p.phase) * p.range;
-      const along = p.base + d;
-      const facing = Math.cos(t * p.speed + p.phase) >= 0 ? 1 : -1;
-      if (p.axis === 'x') { p.ped.position.x = along; p.ped.rotation.y = facing > 0 ? Math.PI / 2 : -Math.PI / 2; }
-      else { p.ped.position.z = along; p.ped.rotation.y = facing > 0 ? 0 : Math.PI; }
-      p.ped.position.y = Math.abs(Math.sin(t * 6 * p.speed)) * 0.12;
+      p.turnIn -= dt;
+      if (p.turnIn <= 0) {
+        p.yaw += (Math.random() - 0.5) * Math.PI * 0.9;
+        p.turnIn = pedMin + Math.random() * (pedMax - pedMin);
+      }
+      const hx = Math.sin(p.yaw), hz = Math.cos(p.yaw);
+      p.ped.position.x += hx * p.speed * dt;
+      p.ped.position.z += hz * p.speed * dt;
+      if (Math.abs(p.ped.position.x) > PED_LIM || Math.abs(p.ped.position.z) > PED_LIM) {
+        p.yaw += Math.PI;
+        p.ped.position.x = Math.max(-PED_LIM, Math.min(PED_LIM, p.ped.position.x));
+        p.ped.position.z = Math.max(-PED_LIM, Math.min(PED_LIM, p.ped.position.z));
+      }
+      p.ped.rotation.y = p.yaw;
+      p.ped.position.y = Math.abs(Math.sin((t + p.phase) * 6)) * 0.13; // walk bob
     }
   }
 

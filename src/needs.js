@@ -35,9 +35,10 @@ export class Needs {
   get lowGas() { return this.gas < this.t.gasLow; }
   get lowHunger() { return this.hunger < this.t.hungerLow; }
 
-  // Bike speed multiplier: 0 if empty, capped if low, else full.
+  // Bike speed multiplier: a slow "push" crawl if empty (you drag it on foot),
+  // eased off when low, else full.
   get bikeSpeedMult() {
-    if (this.gas <= 0) return 0;
+    if (this.gas <= 0) return this.t.gasPushMult ?? 0.2;
     if (this.gas < this.t.gasLow) return this.t.gasLowSpeedMult;
     return 1;
   }

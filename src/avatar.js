@@ -90,6 +90,18 @@ export class Avatar {
     this.speed = 0;
   }
 
+  // Drive the walk cycle without moving (used when pushing the bike on foot).
+  animateWalk(dt, intensity = 1) {
+    this._t += dt * (6 + intensity * 6);
+    const swing = Math.sin(this._t) * 0.5 * intensity;
+    this.parts.legL.rotation.x = swing;
+    this.parts.legR.rotation.x = -swing;
+    // hands forward as if gripping the bike
+    this.parts.armL.rotation.x = -1.1;
+    this.parts.armR.rotation.x = -1.1;
+    this.mesh.position.y = Math.abs(Math.sin(this._t)) * 0.1 * intensity;
+  }
+
   // input: { forward, back, left, right }; opts: { speedMult }
   update(dt, input, opts = {}) {
     const T = TUNING;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Needs } from '../src/needs.js';
 
 const T = {
-  gasMax: 100, gasDrainPerSec: 5, gasLow: 25, gasLowSpeedMult: 0.55, refuelPerSec: 70,
+  gasMax: 100, gasDrainPerSec: 5, gasLow: 25, gasLowSpeedMult: 0.55, gasPushMult: 0.2, refuelPerSec: 70,
   hungerMax: 100, hungerDrainPerSec: 2, hungerLow: 35, hungerMinMult: 0.5,
 };
 
@@ -25,12 +25,12 @@ test('hunger drains always and clamps at zero', () => {
   assert.equal(n.hunger, 0);
 });
 
-test('engine cuts at empty gas; refuel restores', () => {
+test('engine cuts at empty gas but you can still push (crawl); refuel restores', () => {
   const n = new Needs({ ...T, gasMax: 10 });
   n.update(3, { riding: true, moving: true }); // 10 - 15 -> 0
   assert.equal(n.gas, 0);
   assert.equal(n.engineCut, true);
-  assert.equal(n.bikeSpeedMult, 0);
+  assert.equal(n.bikeSpeedMult, T.gasPushMult); // can still crawl/push
   n.refuel(1); // +70 capped to 10
   assert.equal(n.gas, 10);
   assert.equal(n.engineCut, false);
