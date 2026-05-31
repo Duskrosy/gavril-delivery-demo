@@ -48,6 +48,12 @@ async function run(){
   R.carCount = await page.evaluate(()=>window.__demo.traffic.cars.length);
   R.lightAxis = await page.evaluate(()=>typeof window.__demo.traffic.light.goAxis);
   R.vehicleKinds = await page.evaluate(()=>[...new Set(window.__demo.traffic.cars.map(c=>c.kind))].sort());
+  // anti-deadlock: after a warm-up, most cars should keep flowing (a few wait
+  // at the light / queue). Measures net travel over a steady-state window.
+  R.carsMoving = await page.evaluate(async ()=>{ const cars=window.__demo.traffic.cars;
+    await new Promise(r=>setTimeout(r,2500)); // warm up out of the cold start
+    const before=cars.map(c=>c.along); await new Promise(r=>setTimeout(r,2000));
+    return cars.filter((c,i)=>Math.abs(c.along-before[i])>4).length; });
 
   // clock in at the hub
   await tp(page,'hub'); await wait(200);
@@ -113,8 +119,8 @@ async function run(){
   for(const [k,v] of Object.entries(R)) console.log(k.padEnd(20),':',v);
   console.log('page errors'.padEnd(20),':', errors.length?errors:'none');
   const ok = R.startMode==='ON FOOT' && R.startOffShift==='OFF_SHIFT' && R.riding===true &&
-    R.canPushEmpty===true && R.pushVisual===true && R.carCount===16 && R.lightAxis==='string' &&
-    R.vehicleKinds.includes('car') && R.vehicleKinds.length>=2 &&
+    R.canPushEmpty===true && R.pushVisual===true && R.carCount===26 && R.lightAxis==='string' &&
+    R.vehicleKinds.includes('car') && R.vehicleKinds.length>=2 && R.carsMoving>=14 &&
     R.clockedIn===true && R.stateAfterClockIn==='OFFER' && R.carryingAfterPickup==='fresh' &&
     R.foodAfterCrash==='destroyed' && R.foodAfterRemake==='fresh' && R.gasRose===true &&
     R.hungerAfterEat>95 && R.pushedOut===true && R.dayNightChanges===true &&

@@ -191,18 +191,30 @@ export class Traffic {
 
     for (const car of this.cars) {
       const w = car._w;
-      const look = T.carLookAhead + car.halfL; // longer vehicles look further
-      const px = w.x + w.hvx * look;
-      const pz = w.z + w.hvz * look;
       let target = T.carSpeed * car.speedFactor;
 
-      // yield to the player ahead
-      if (playerPos && Math.hypot(playerPos.x - px, playerPos.z - pz) < car.yieldDist + 1.5) target = 0;
-      // yield to a car ahead
+      // Distance to a point IF it lies ahead of this car within its lane,
+      // else -1. Directional + lane-gated so cars never yield to oncoming,
+      // crossing, or beside traffic (that mutual-yield was the deadlock).
+      const aheadDist = (ox, oz, latMax) => {
+        const rx = ox - w.x, rz = oz - w.z;
+        const ahead = rx * w.hvx + rz * w.hvz;       // along heading
+        if (ahead <= 0) return -1;
+        const lat = Math.abs(rx * -w.hvz + rz * w.hvx); // perpendicular
+        return lat < latMax ? ahead : -1;
+      };
+
+      // yield to the player if they're in the lane ahead
+      if (playerPos) {
+        const d = aheadDist(playerPos.x, playerPos.z, 3.0);
+        if (d > 0 && d < car.yieldDist + car.halfL + 2) target = 0;
+      }
+      // yield to the nearest car ahead in the same lane
       if (target > 0) {
         for (const o of this.cars) {
           if (o === car) continue;
-          if (Math.hypot(o._w.x - px, o._w.z - pz) < car.yieldDist + o.halfL * 0.5) { target = 0; break; }
+          const d = aheadDist(o._w.x, o._w.z, 2.4);
+          if (d > 0 && d < car.yieldDist + car.halfL + o.halfL) { target = 0; break; }
         }
       }
       // obey the one traffic light on both its approaches

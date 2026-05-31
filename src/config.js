@@ -99,7 +99,7 @@ export const TUNING = {
   bumpCooldown:  0.7,
 
   // traffic
-  carCount:      16,
+  carCount:      26,
   carSpeed:      10,
   carAccel:      9,      // m/s² toward target speed
   carBrake:      22,     // m/s² when yielding
