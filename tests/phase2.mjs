@@ -48,6 +48,7 @@ async function run(){
   R.carCount = await page.evaluate(()=>window.__demo.traffic.cars.length);
   R.lightAxis = await page.evaluate(()=>typeof window.__demo.traffic.light.goAxis);
   R.vehicleKinds = await page.evaluate(()=>[...new Set(window.__demo.traffic.cars.map(c=>c.kind))].sort());
+  R.lightCount = await page.evaluate(()=>window.__demo.traffic.lights.length);
   // anti-deadlock: park the player far away (so cars don't yield to it), then
   // count cars that travel over a window long enough that the light cycles
   // green for every approach. Uses world position (robust to turns/wraps).
@@ -134,8 +135,8 @@ async function run(){
   for(const [k,v] of Object.entries(R)) console.log(k.padEnd(20),':',v);
   console.log('page errors'.padEnd(20),':', errors.length?errors:'none');
   const ok = R.startMode==='ON FOOT' && R.startOffShift==='OFF_SHIFT' && R.riding===true &&
-    R.canPushEmpty===true && R.pushVisual===true && R.carCount===26 && R.lightAxis==='string' &&
-    R.vehicleKinds.includes('car') && R.vehicleKinds.length>=2 && R.carsMoving>=20 &&
+    R.canPushEmpty===true && R.pushVisual===true && R.carCount===36 && R.lightAxis==='string' &&
+    R.vehicleKinds.includes('moto') && R.vehicleKinds.length>=4 && R.lightCount===6 && R.carsMoving>=24 &&
     R.orbitCam===true && R.aggrCount>=1 && R.haterCount>=1 && R.agentCount>=38 && R.pedPush===true &&
     R.clockedIn===true && R.stateAfterClockIn==='OFFER' && R.carryingAfterPickup==='fresh' &&
     R.foodAfterCrash==='destroyed' && R.foodAfterRemake==='fresh' && R.gasRose===true &&

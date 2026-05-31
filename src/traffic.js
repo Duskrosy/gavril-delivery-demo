@@ -6,7 +6,7 @@
 // ============================================================
 
 import * as THREE from 'three';
-import { PALETTE, TUNING, WORLD, TRAFFIC_LIGHT } from './config.js';
+import { PALETTE, TUNING, WORLD, TRAFFIC_LIGHTS } from './config.js';
 
 const C = (hex) => new THREE.Color(hex);
 const CAR_COLORS = ['#7da0ff', '#ff8ec8', '#6fd2e6', '#b58cff', '#ffc864', '#8de0b0'];
@@ -92,11 +92,33 @@ function makeBus(colorHex) {
   return g;
 }
 
+// A delivery moto (rider on a scooter) that drives the roads like a vehicle.
+function makeMoto(colorHex) {
+  const g = new THREE.Group();
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.22, 2.0),
+    new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .45, metalness: .3, emissive: C(colorHex), emissiveIntensity: .1 }));
+  deck.position.y = 0.6; deck.castShadow = true; g.add(deck);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8), new THREE.MeshStandardMaterial({ color: C('#1b1428') }));
+  col.position.set(0, 1.2, 0.9); col.rotation.x = -0.2; g.add(col);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), new THREE.MeshStandardMaterial({ color: C('#1b1428') }));
+  bar.position.set(0, 1.7, 0.85); bar.rotation.z = Math.PI / 2; g.add(bar);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), new THREE.MeshStandardMaterial({ color: C('#fff0c8'), emissive: C('#fff0c8'), emissiveIntensity: 1.5 }));
+  head.position.set(0, 1.45, 1.15); g.add(head);
+  const tire = new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .95 });
+  for (const z of [0.95, -0.9]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.24, 14), tire); w.rotation.z = Math.PI / 2; w.position.set(0, 0.5, z); g.add(w); }
+  const cloth = new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .7 });
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.7, 4, 8), cloth); torso.position.set(0, 1.55, -0.1); torso.rotation.x = 0.22; torso.castShadow = true; g.add(torso);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.33, 14, 12), new THREE.MeshStandardMaterial({ color: C('#1b1428'), roughness: .4, metalness: .25 })); helmet.position.set(0, 2.15, 0.05); g.add(helmet);
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.75, 0.75), new THREE.MeshStandardMaterial({ color: C(PALETTE.panel2), emissive: C(PALETTE.reward), emissiveIntensity: .55, roughness: .5 })); box.position.set(0, 1.75, -0.85); g.add(box);
+  return g;
+}
+
 // vehicle types: footprint + behaviour ranges. `weight` biases the mix.
 const VEHICLE_TYPES = [
-  { kind: 'car', make: makeCar, w: 2.0, l: 4.2, weight: 6, speed: [0.9, 1.2], turn: [0.3, 0.5], yield: 4.2, accel: [0.9, 1.3] },
-  { kind: 'van', make: makeVan, w: 2.3, l: 5.8, weight: 3, speed: [0.8, 1.0], turn: [0.2, 0.4], yield: 4.8, accel: [0.8, 1.0] },
-  { kind: 'bus', make: makeBus, w: 2.7, l: 8.6, weight: 2, speed: [0.6, 0.8], turn: [0.08, 0.18], yield: 5.6, accel: [0.6, 0.85] },
+  { kind: 'car', make: makeCar, w: 2.0, l: 4.2, weight: 6, speed: [0.9, 1.2], turn: [0.35, 0.5], yield: 4.2, accel: [0.9, 1.3] },
+  { kind: 'van', make: makeVan, w: 2.3, l: 5.8, weight: 3, speed: [0.8, 1.0], turn: [0.25, 0.4], yield: 4.8, accel: [0.8, 1.0] },
+  { kind: 'bus', make: makeBus, w: 2.7, l: 8.6, weight: 2, speed: [0.6, 0.8], turn: [0.1, 0.2], yield: 5.6, accel: [0.6, 0.85] },
+  { kind: 'moto', make: makeMoto, w: 1.0, l: 2.2, weight: 4, speed: [1.0, 1.3], turn: [0.5, 0.7], yield: 3.2, accel: [1.0, 1.5] },
 ];
 const BUS_COLORS = ['#ffc864', '#6fd2e6', '#ff8ec8'];
 function pickType(r) {
@@ -115,14 +137,16 @@ function carWorld(car) {
 }
 
 class TrafficLightCtrl {
-  constructor(refs) {
+  constructor(refs, pos, offset = 0) {
     this.refs = refs || {};
+    this.pos = pos;                 // { x, z } intersection it governs
     this.cycle = TUNING.lightCycle;
-    this.phase = 'green';
-    this.t = 0;
+    // stagger so the lights aren't all synced
+    this.phase = offset % 2 === 0 ? 'green' : 'red';
+    this.t = (offset * 1.9) % this.cycle[this.phase];
     this._apply();
   }
-  // the z-axis road (x≈0) goes on green/yellow; the x-axis road (z≈light.z) goes on red
+  // the z-axis road goes on green/yellow; the crossing x-axis road goes on red
   get goAxis() { return this.phase === 'red' ? 'x' : 'z'; }
   _apply() {
     const set = (m, lit) => { if (m) m.emissiveIntensity = lit ? 1.8 : 0.04; };
@@ -172,11 +196,17 @@ export class Traffic {
       }
       // some drivers despise motorcycles and won't yield to the rider
       car.hatesBikes = rnd() < TUNING.bikeHaterChance;
+      car._idx = this.cars.length;
       scene.add(car.mesh);
       this.cars.push(car);
       i++;
     }
-    this.light = new TrafficLightCtrl(lightRefs);
+    // one controller per traffic light, keyed by intersection for fast lookup
+    const refsArr = Array.isArray(lightRefs) ? lightRefs : [lightRefs];
+    this.lights = TRAFFIC_LIGHTS.map((l, k) => new TrafficLightCtrl(refsArr[k], l.position, k));
+    this.lightMap = new Map();
+    for (const ctrl of this.lights) this.lightMap.set(ctrl.pos.x + ',' + ctrl.pos.z, ctrl);
+    this.light = this.lights[0]; // alias
     this.lines = lines;
     this._place();
     this._bodyVel = new THREE.Vector3(); this._carVel = new THREE.Vector3();
@@ -195,8 +225,18 @@ export class Traffic {
   // playerPos: THREE.Vector3 (cars yield to the player); playerRiding lets
   // motorcycle-haters refuse to yield (and surge) when you're on the bike.
   update(dt, playerPos, playerRiding) {
-    this.light.update(dt);
+    for (const lg of this.lights) lg.update(dt);
     const T = TUNING, half = WORLD.half, step = WORLD.blockSpacing;
+
+    // the next grid intersection ahead of a car + distance to it
+    const nextInt = (car) => {
+      let m = Math.round(car.along / step) * step;
+      if (car.dir > 0 && m < car.along + 0.5) m += step;
+      if (car.dir < 0 && m > car.along - 0.5) m -= step;
+      return car.axis === 'z'
+        ? { ix: car.line, iz: m, dist: (m - car.along) * car.dir }
+        : { ix: m, iz: car.line, dist: (m - car.along) * car.dir };
+    };
 
     // cache current world positions for mutual yielding
     for (const car of this.cars) car._w = carWorld(car);
@@ -237,16 +277,25 @@ export class Traffic {
         }
         if (gap < Infinity) target = Math.min(target, Math.max(0, (gap - 2.2) * 1.7));
       }
-      // obey the one traffic light on both its approaches
-      const ctrlZ = car.axis === 'z' && car.line === 0;
-      const ctrlX = car.axis === 'x' && car.line === TRAFFIC_LIGHT.position.z;
-      if (ctrlZ || ctrlX) {
-        const mustStop = car.axis !== this.light.goAxis;
-        const stopAlong = car.axis === 'z' ? TRAFFIC_LIGHT.position.z : TRAFFIC_LIGHT.position.x;
-        const gap = (stopAlong - car.along) * car.dir; // distance ahead to the stop line
-        if (mustStop && gap > -1 && gap < T.carLookAhead) {
-          target = 0;
-          if (gap < 1.2) { car.speed = 0; car.along = stopAlong - car.dir * 1.2; } // hold at the line
+      // intersections: obey a traffic light if this junction has one, else
+      // give way to a crossing car already in the box (priority by distance,
+      // tie-broken by id so exactly one yields — never a mutual deadlock).
+      const ni = nextInt(car);
+      if (ni.dist > -1 && ni.dist < T.approachDist + car.halfL) {
+        const ctrl = this.lightMap.get(ni.ix + ',' + ni.iz);
+        if (ctrl) {
+          if (car.axis !== ctrl.goAxis) {           // red for this approach
+            target = 0;
+            if (ni.dist < 1.4) { car.speed = 0; car.along -= car.dir * 0.05; }
+          }
+        } else {
+          for (const o of this.cars) {
+            if (o === car || o.axis === car.axis) continue;
+            const od = Math.hypot(o._w.x - ni.ix, o._w.z - ni.iz);
+            if (od < T.intersectionRadius) {
+              if (od < ni.dist - 0.3 || (Math.abs(od - ni.dist) <= 0.3 && o._idx < car._idx)) { target = 0; break; }
+            }
+          }
         }
       }
 
@@ -257,10 +306,24 @@ export class Traffic {
       // advance
       car.along += car.dir * car.speed * dt;
 
-      // wrap around the map edge (cars loop their road — no turning, which
-      // otherwise funnels and traps cars into a permanent jam)
-      if (car.along > half) car.along -= 2 * half;
-      else if (car.along < -half) car.along += 2 * half;
+      // turn at an intersection (cars + motos). Safe now: distinct lanes, only
+      // same-lane following, and give-way means cars keep flowing rather than
+      // stacking, so turners don't funnel into a permanent jam.
+      const g = Math.round(car.along / step) * step;
+      if (Math.abs(g) < half - 1 && Math.abs(car.along - g) < 0.7 && car._lastTurn !== g && car.speed > 1.5) {
+        car._lastTurn = g;
+        if (Math.random() < car.turnChance) {
+          const oldLine = car.line;
+          car.axis = car.axis === 'z' ? 'x' : 'z';
+          car.line = g;
+          car.dir = Math.random() < 0.5 ? 1 : -1;
+          car.along = oldLine;
+        }
+      }
+
+      // wrap around the map edge
+      if (car.along > half) { car.along -= 2 * half; car._lastTurn = null; }
+      else if (car.along < -half) { car.along += 2 * half; car._lastTurn = null; }
     }
 
     this._place();

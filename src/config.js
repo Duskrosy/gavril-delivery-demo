@@ -92,26 +92,28 @@ export const TUNING = {
   collisionCooldown: 1.2,
   knockback:     5,
 
-  // speed bumps
-  bumpSlowMult:  0.4,    // speed retained when crossing a bump
-  bumpBounce:    0.55,   // camera vertical jolt
-  bumpBand:      2.6,    // perpendicular detection half-width
+  // speed bumps (gentle — barely slow you)
+  bumpSlowMult:  0.66,   // speed retained when crossing a bump
+  bumpBounce:    0.3,    // camera vertical jolt
+  bumpBand:      2.4,    // perpendicular detection half-width
   bumpCooldown:  0.7,
 
   // traffic
-  carCount:      26,
+  carCount:      36,
   carSpeed:      10,
   carAccel:      9,      // m/s² toward target speed
   carBrake:      22,     // m/s² when yielding
   carLookAhead:  11,     // how far ahead a car watches for obstacles
   carYieldDist:  4.5,    // brake if an obstacle is within this of the look point
-  carTurnChance: 0.4,    // probability of turning (vs. straight) at an intersection
+  carTurnChance: 0.45,   // probability of turning (vs. straight) at an intersection
+  intersectionRadius: 6, // give-way box at uncontrolled junctions
+  approachDist:  10,     // how close to a junction a car starts watching it
   lightCycle:    { green: 6.5, yellow: 1.8, red: 6.5 }, // per phase, per axis
 
   // driver personalities
-  aggressiveChance: 0.28,   // fraction of drivers who are fast & pushy
-  aggressiveSpeed: [1.4, 1.8],
-  bikeHaterChance: 0.22,    // drivers who refuse to yield to the rider (and surge)
+  aggressiveChance: 0.12,   // fewer fast/pushy drivers now
+  aggressiveSpeed: [1.3, 1.6],
+  bikeHaterChance: 0.16,    // drivers who refuse to yield to the rider (and surge)
 
   // pedestrians (now solid)
   pedCount:      30,
@@ -119,8 +121,8 @@ export const TUNING = {
   pedRadius:     0.85,
   pedTurnEvery:  [2.5, 6],  // seconds between heading changes (min,max)
 
-  // NPC delivery riders
-  courierRoam:   5,         // scooter couriers wandering the city
+  // NPC delivery riders (roaming riders now live in traffic as 'moto' type)
+  courierRoam:   2,         // a couple of free-wandering couriers off the roads
   courierHang:   6,         // couriers idling / eating at spots
   courierSpeed:  6.5,
 
@@ -167,17 +169,29 @@ export const FOOD_STANDS = [
   { id: 'stand-b', position: { x: 15, z: 75 } },
 ];
 
-// One working traffic light at a real road intersection (x=0, z=-30).
-export const TRAFFIC_LIGHT = { position: { x: 0, z: -30 }, axis: 'z' };
+// Working traffic lights at real road intersections (multiples of 30).
+export const TRAFFIC_LIGHTS = [
+  { position: { x: 0, z: 0 } },
+  { position: { x: 0, z: -30 } },
+  { position: { x: 60, z: 60 } },
+  { position: { x: -60, z: -60 } },
+  { position: { x: 60, z: -60 } },
+  { position: { x: -60, z: 60 } },
+];
 
-// Speed bumps: humps across a road. Each sits ON a road (one coord ≡0 mod 30);
-// axis = the road's travel direction.
+// Speed bumps: humps across a road. Each sits ON a road (one coord ≡0 mod 30).
 export const SPEED_BUMPS = [
   { position: { x: 0,   z: 45 },  axis: 'z' },
-  { position: { x: 0,   z: -75 }, axis: 'z' },
   { position: { x: 45,  z: 0 },   axis: 'x' },
   { position: { x: -45, z: 0 },   axis: 'x' },
-  { position: { x: 60,  z: 45 },  axis: 'z' },
+];
+
+// Points of interest — gathering spots (some replace a building block).
+export const POIS = [
+  { id: 'plaza',     type: 'plaza',     position: { x: -45, z: 45 } },
+  { id: 'foodtruck', type: 'foodtruck', position: { x: 45, z: -45 } },
+  { id: 'greens',    type: 'park',      position: { x: 45, z: 45 } },
+  { id: 'corner',    type: 'plaza',     position: { x: -45, z: -15 } },
 ];
 
 // Where the player spawns on foot and where the bike is parked at start

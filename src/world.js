@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { PALETTE, WORLD, LANDMARKS, HOUSES, TUNING,
-  GAS_STATIONS, FOOD_STANDS, TRAFFIC_LIGHT, SPEED_BUMPS, SPAWN } from './config.js';
+  GAS_STATIONS, FOOD_STANDS, TRAFFIC_LIGHTS, SPEED_BUMPS, SPAWN, POIS } from './config.js';
 
 const C = (hex) => new THREE.Color(hex);
 
@@ -380,6 +380,52 @@ function makeTrafficLight() {
   return { group: g, redMat, yellowMat, greenMat };
 }
 
+// --- points of interest (gathering spots) ----------------------------------
+function makeBench() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: C('#3a2f52'), roughness: .8 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 1), mat); seat.position.y = 0.7; seat.castShadow = true; g.add(seat);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(3, 0.9, 0.2), mat); back.position.set(0, 1.2, -0.4); g.add(back);
+  return g;
+}
+function makePOI(type) {
+  const g = new THREE.Group();
+  if (type === 'park') {
+    const lawn = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, .4, 7),
+      new THREE.MeshStandardMaterial({ color: C('#1c3326'), roughness: .95, emissive: C(PALETTE.reward), emissiveIntensity: .05 }));
+    lawn.position.y = .2; lawn.receiveShadow = true; g.add(lawn);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2, r = 4 + (i % 2) * 3;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.4, .5, 3, 6), new THREE.MeshStandardMaterial({ color: C('#3a2b22'), roughness: 1 }));
+      trunk.position.set(Math.cos(a) * r, 1.5, Math.sin(a) * r); g.add(trunk);
+      const fol = new THREE.Mesh(new THREE.ConeGeometry(2.2, 4.5, 7), new THREE.MeshStandardMaterial({ color: C('#2f6b46'), roughness: .9, emissive: C(PALETTE.reward), emissiveIntensity: .08 }));
+      fol.position.set(Math.cos(a) * r, 5, Math.sin(a) * r); fol.castShadow = true; g.add(fol);
+    }
+    for (const a of [0.6, 3.4]) { const b = makeBench(); b.position.set(Math.cos(a) * 6, 0, Math.sin(a) * 6); b.rotation.y = -a; g.add(b); }
+  } else if (type === 'foodtruck') {
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, .35, 8), new THREE.MeshStandardMaterial({ color: C('#1a1530'), roughness: .85 }));
+    pad.position.y = .17; pad.receiveShadow = true; g.add(pad);
+    for (const [x, col] of [[-3.5, PALETTE.decision], [3.5, PALETTE.nav]]) {
+      const truck = new THREE.Mesh(new THREE.BoxGeometry(3, 2.4, 5), new THREE.MeshStandardMaterial({ color: C(col), roughness: .5, emissive: C(col), emissiveIntensity: .1 }));
+      truck.position.set(x, 1.4, -2); truck.castShadow = true; g.add(truck);
+      const awn = new THREE.Mesh(new THREE.BoxGeometry(3.4, .25, 2), new THREE.MeshStandardMaterial({ color: C(col), emissive: C(col), emissiveIntensity: .7 }));
+      awn.position.set(x, 2.6, 0.6); g.add(awn);
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(2, .9, .3), new THREE.MeshStandardMaterial({ color: C(PALETTE.panel), emissive: C(col), emissiveIntensity: 1.2 }));
+      sign.position.set(x, 3.6, -2); g.add(sign);
+    }
+  } else { // plaza
+    const tile = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, .3, 4),
+      new THREE.MeshStandardMaterial({ color: C(PALETTE.panel2), roughness: .8, emissive: C(PALETTE.action), emissiveIntensity: .06 }));
+    tile.position.y = .15; tile.rotation.y = Math.PI / 4; tile.receiveShadow = true; g.add(tile);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(.6, 1.2, 4, 10), new THREE.MeshStandardMaterial({ color: C('#d9d2ec'), emissive: C(PALETTE.action), emissiveIntensity: .3 }));
+    stem.position.y = 2; g.add(stem);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(1.3, 16, 12), new THREE.MeshStandardMaterial({ color: C(PALETTE.action), emissive: C(PALETTE.action), emissiveIntensity: 1.1 }));
+    orb.position.y = 4.6; g.add(orb);
+    for (const a of [0.3, 1.9, 3.5, 5.0]) { const b = makeBench(); b.position.set(Math.cos(a) * 6.5, 0, Math.sin(a) * 6.5); b.rotation.y = -a + Math.PI; g.add(b); }
+  }
+  return g;
+}
+
 // --- speed bump ------------------------------------------------------------
 function makeSpeedBump(axis) {
   const g = new THREE.Group();
@@ -491,7 +537,7 @@ export function buildWorld(scene) {
     ...HOUSES.map(h => ({ x: h.position.x, z: h.position.z, r: 12 })),
     ...GAS_STATIONS.map(s => ({ x: s.position.x, z: s.position.z, r: 13 })),
     ...FOOD_STANDS.map(s => ({ x: s.position.x, z: s.position.z, r: 9 })),
-    { x: TRAFFIC_LIGHT.position.x, z: TRAFFIC_LIGHT.position.z, r: 10 },
+    ...POIS.map(p => ({ x: p.position.x, z: p.position.z, r: 13 })),
     { x: SPAWN.foot.x, z: SPAWN.foot.z, r: 8 },
     { x: SPAWN.bike.x, z: SPAWN.bike.z, r: 8 },
   ];
@@ -587,13 +633,21 @@ export function buildWorld(scene) {
     return { ...st, object: obj, position3: new THREE.Vector3(st.position.x, 0, st.position.z) };
   });
 
-  // traffic light
-  const tl = makeTrafficLight();
-  tl.group.position.set(TRAFFIC_LIGHT.position.x - 4, 0, TRAFFIC_LIGHT.position.z);
-  tl.group.rotation.y = -Math.PI / 2; // arm reaches over the road
-  scene.add(tl.group);
-  const trafficLight = { redMat: tl.redMat, yellowMat: tl.yellowMat, greenMat: tl.greenMat,
-    position: TRAFFIC_LIGHT.position };
+  // traffic lights (one pole per controlled intersection)
+  const trafficLights = TRAFFIC_LIGHTS.map(l => {
+    const tl = makeTrafficLight();
+    tl.group.position.set(l.position.x - 4, 0, l.position.z);
+    tl.group.rotation.y = -Math.PI / 2; // arm reaches over the road
+    scene.add(tl.group);
+    return { redMat: tl.redMat, yellowMat: tl.yellowMat, greenMat: tl.greenMat, position: l.position };
+  });
+
+  // points of interest (replace a building block with a gathering spot)
+  for (const poi of POIS) {
+    const obj = makePOI(poi.type);
+    obj.position.set(poi.position.x, 0, poi.position.z);
+    scene.add(obj);
+  }
 
   // speed bumps
   for (const b of SPEED_BUMPS) {
@@ -631,20 +685,23 @@ export function buildWorld(scene) {
     couriers.push({ obj, yaw, speed: (TUNING.courierSpeed ?? 6) * (0.8 + Math.random() * 0.4), turnIn: 1 + Math.random() * 4 });
   }
 
-  // couriers idling / eating at spots (food stands + the restaurant)
+  // people gathering at spots: couriers idle/eat at food stands + restaurant;
+  // crowds mill around the points of interest (plazas, park, food trucks).
   const hangouts = [];
-  const hangSpots = [...foodStands.map(s => s.position3), new THREE.Vector3(WORLD.restaurant.position.x, 0, WORLD.restaurant.position.z)];
-  const perSpot = Math.ceil((TUNING.courierHang ?? 6) / hangSpots.length);
-  for (const spot of hangSpots) {
-    for (let k = 0; k < perSpot && hangouts.length < (TUNING.courierHang ?? 6); k++) {
-      const obj = makeHangoutNPC(courierColors[hangouts.length % courierColors.length]);
-      const a = Math.random() * Math.PI * 2, rr = 5 + Math.random() * 3;
-      obj.position.set(spot.x + Math.cos(a) * rr, 0, spot.z + Math.sin(a) * rr);
+  const cluster = (cx, cz, n, makeFn, rMin, rMax) => {
+    for (let k = 0; k < n; k++) {
+      const obj = makeFn(courierColors[hangouts.length % courierColors.length]);
+      const a = Math.random() * Math.PI * 2, rr = rMin + Math.random() * (rMax - rMin);
+      obj.position.set(cx + Math.cos(a) * rr, 0, cz + Math.sin(a) * rr);
       obj.rotation.y = Math.random() * Math.PI * 2;
       scene.add(obj);
       hangouts.push({ obj, phase: Math.random() * 10 });
     }
-  }
+  };
+  const courierSpots = [...foodStands.map(s => s.position3), new THREE.Vector3(WORLD.restaurant.position.x, 0, WORLD.restaurant.position.z)];
+  const perCourier = Math.ceil((TUNING.courierHang ?? 6) / courierSpots.length);
+  for (const s of courierSpots) cluster(s.x, s.z, perCourier, makeHangoutNPC, 5, 8);
+  for (const poi of POIS) cluster(poi.position.x, poi.position.z, 3 + Math.floor(Math.random() * 2), makePedestrian, 6, 9);
 
   // waypoint marker
   const marker = makeMarker();
@@ -713,7 +770,7 @@ export function buildWorld(scene) {
     landmarks: landmarkObjs,
     gasStations,
     foodStands,
-    trafficLight,
+    trafficLights,
     marker,
     solids,
     // moving NPCs (peds + couriers) as small circular solids for collision

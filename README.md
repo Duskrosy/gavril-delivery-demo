@@ -41,14 +41,14 @@ Midday → Dinner → Late-night), shown in the HUD.
   crawl. Pull onto a **gas station** pad to refuel automatically.
 - **Hunger** (gold meter): drains slowly. Low hunger slows you down. **Eat** at the
   restaurant or a food stand (press **E**) to top up — free.
-- **Traffic**: cars, **vans, and buses** drive the grid with varied speeds/behavior,
-  **brake for you** and for each other (car-following), and **stop at the traffic light**
-  (both approaches). Some drivers are **aggressive** and a few **despise motorcycles** —
-  they won't yield to the rider and will surge. A minor knock **shakes** the food (smaller
-  tip); a real **crash destroys** it — ride back for a free remake. **Speed bumps** jolt you.
-- **People**: pedestrians **wander** the city and you **collide** with them, plus **NPC
-  delivery riders** — some weaving the streets on scooters, others hanging out / eating at
-  the food stands and restaurant.
+- **Traffic**: cars, **vans, buses, and motorbikes** drive the grid, **turn at
+  intersections**, **brake/car-follow**, **stop at the traffic lights** (several across the
+  city), and **give way** at uncontrolled junctions. A few drivers are **aggressive** or
+  **despise motorcycles** (they won't yield to the rider and surge). A knock **shakes** the
+  food (smaller tip); a crash **destroys** it — ride back for a free remake. Gentle **speed bumps**.
+- **People & places**: pedestrians **wander** (you collide with them), **NPC delivery
+  riders** weave the roads and hang out at spots, and **points of interest** — plazas, a
+  park, food-truck corners — draw little crowds around the city.
 - **Camera**: Roblox-style orbit — right-drag or **Ctrl shift-lock** to look around, wheel to zoom.
 
 ## Tests (logic only, headless)
