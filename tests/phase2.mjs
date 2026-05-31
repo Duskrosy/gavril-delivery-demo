@@ -44,9 +44,10 @@ async function run(){
   await shot(page,'p4-push.png');
   await page.evaluate(()=>window.__demo.needs.setGas(100)); await wait(100);
 
-  // traffic sanity
+  // traffic sanity + vehicle variety
   R.carCount = await page.evaluate(()=>window.__demo.traffic.cars.length);
   R.lightAxis = await page.evaluate(()=>typeof window.__demo.traffic.light.goAxis);
+  R.vehicleKinds = await page.evaluate(()=>[...new Set(window.__demo.traffic.cars.map(c=>c.kind))].sort());
 
   // clock in at the hub
   await tp(page,'hub'); await wait(200);
@@ -113,6 +114,7 @@ async function run(){
   console.log('page errors'.padEnd(20),':', errors.length?errors:'none');
   const ok = R.startMode==='ON FOOT' && R.startOffShift==='OFF_SHIFT' && R.riding===true &&
     R.canPushEmpty===true && R.pushVisual===true && R.carCount===16 && R.lightAxis==='string' &&
+    R.vehicleKinds.includes('car') && R.vehicleKinds.length>=2 &&
     R.clockedIn===true && R.stateAfterClockIn==='OFFER' && R.carryingAfterPickup==='fresh' &&
     R.foodAfterCrash==='destroyed' && R.foodAfterRemake==='fresh' && R.gasRose===true &&
     R.hungerAfterEat>95 && R.pushedOut===true && R.dayNightChanges===true &&

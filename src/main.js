@@ -76,6 +76,7 @@ let bumpCd = 0;
 let lastPhase = '';
 let pushing = false;
 let lastPushing = false;
+let freezeCam = false; // dev/aerial capture only
 
 // --- input ------------------------------------------------------------------
 const input = { forward: false, back: false, left: false, right: false };
@@ -282,8 +283,10 @@ function updatePushVisual(dt) {
     }
   }
   if (pushing) {
-    const back = 2.0;
-    avatar.mesh.position.set(bike.position.x - bike.headingVec.x * back, 0, bike.position.z - bike.headingVec.z * back);
+    // stand alongside the bike (to its right), facing the same way, hands on it
+    const side = 1.7;
+    const rx = bike.headingVec.z, rz = -bike.headingVec.x; // right of heading
+    avatar.mesh.position.set(bike.position.x + rx * side, 0, bike.position.z + rz * side);
     avatar.yaw = bike.yaw; avatar.mesh.rotation.y = bike.yaw;
     avatar.animateWalk(dt, Math.min(1, Math.abs(bike.speed) / 4 + 0.3));
   }
@@ -349,7 +352,7 @@ function tick() {
     hud.setPrompt('');
   }
 
-  followCam.follow(body.position, body.headingVec, dt, mount.isRiding ? CAM.bike : CAM.foot);
+  if (!freezeCam) followCam.follow(body.position, body.headingVec, dt, mount.isRiding ? CAM.bike : CAM.foot);
 
   // HUD reflections
   hud.setNeeds({ gasPct: needs.gasPct, hungerPct: needs.hungerPct, lowGas: needs.lowGas, lowHunger: needs.lowHunger });
@@ -386,7 +389,8 @@ hud.onStart(() => {
 });
 
 if (new URLSearchParams(location.search).get('dev')) {
-  window.__demo = { game, avatar, bike, mount, needs, traffic, dayNight, world, hud, STATES, FOOD, TUNING, get input() { return input; } };
+  window.__demo = { game, avatar, bike, mount, needs, traffic, dayNight, world, hud, camera, STATES, FOOD, TUNING,
+    setFreeze: (v) => { freezeCam = v; }, get input() { return input; } };
 }
 
 boot();

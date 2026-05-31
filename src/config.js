@@ -122,59 +122,64 @@ export const TUNING = {
 };
 
 // --- city props ------------------------------------------------------------
+// IMPORTANT: roads sit on multiples of blockSpacing (…,-30,0,30,…). Every prop
+// below lives at a *block centre* (±15,±45,±75,±105 — i.e. ≡15 mod 30) so it
+// sits BETWEEN roads and cars never drive through it. Only the traffic light
+// is placed on a road intersection.
+
 // Gas stations: pull onto the pad to auto-refuel.
 export const GAS_STATIONS = [
-  { id: 'gas-a', position: { x: 60, z: -16 } },
-  { id: 'gas-b', position: { x: -60, z: 18 } },
-  { id: 'gas-c', position: { x: -16, z: -60 } },
+  { id: 'gas-a', position: { x: 45, z: -15 } },
+  { id: 'gas-b', position: { x: -45, z: 15 } },
+  { id: 'gas-c', position: { x: 45, z: 75 } },
 ];
 
 // Food stands: press E nearby to eat (free). The restaurant also feeds you.
 export const FOOD_STANDS = [
-  { id: 'stand-a', position: { x: 18, z: 32 } },
-  { id: 'stand-b', position: { x: -34, z: -34 } },
+  { id: 'stand-a', position: { x: -15, z: -45 } },
+  { id: 'stand-b', position: { x: 15, z: 75 } },
 ];
 
-// One working traffic light governing the central N–S road (x ≈ 0).
+// One working traffic light at a real road intersection (x=0, z=-30).
 export const TRAFFIC_LIGHT = { position: { x: 0, z: -30 }, axis: 'z' };
 
-// Speed bumps: humps spanning a road. axis = road travel direction.
+// Speed bumps: humps across a road. Each sits ON a road (one coord ≡0 mod 30);
+// axis = the road's travel direction.
 export const SPEED_BUMPS = [
-  { position: { x: 0,   z: 30 },  axis: 'z' },
-  { position: { x: 0,   z: -60 }, axis: 'z' },
-  { position: { x: 30,  z: 0 },   axis: 'x' },
-  { position: { x: -30, z: 0 },   axis: 'x' },
-  { position: { x: 60,  z: 30 },  axis: 'z' },
-  { position: { x: -60, z: -30 }, axis: 'z' },
+  { position: { x: 0,   z: 45 },  axis: 'z' },
+  { position: { x: 0,   z: -75 }, axis: 'z' },
+  { position: { x: 45,  z: 0 },   axis: 'x' },
+  { position: { x: -45, z: 0 },   axis: 'x' },
+  { position: { x: 60,  z: 45 },  axis: 'z' },
 ];
 
-// Where the player spawns on foot and where the bike is parked at start.
-export const SPAWN = { foot: { x: 8, z: 34, yaw: Math.PI }, bike: { x: -4, z: 34, yaw: Math.PI } };
+// Where the player spawns on foot and where the bike is parked at start
+// (block centre (15,45), one block north of the hub — off the road).
+export const SPAWN = { foot: { x: 18, z: 48, yaw: Math.PI }, bike: { x: 6, z: 48, yaw: Math.PI } };
 
 // --- World layout ----------------------------------------------------------
-// Roomy night-city blocks. Roads run along X/Z. y is up.
-// The restaurant is the central hub (also the clock-in point); each house
-// sits beside a distinctive landmark out toward the city's corners.
+// Roomy night-city blocks. half MUST be a multiple of blockSpacing so the road
+// grid is symmetric through the origin. Roads at 0,±30,±60,±90,±120.
 export const WORLD = {
-  half: 110,         // ground extends [-half, half] on X and Z
+  half: 120,         // ground extends [-half, half]; 120 = 4 × blockSpacing
   blockSpacing: 30,  // road grid spacing
   roadWidth: 12,
-  restaurant: { id: 'restaurant', position: { x: 0, z: 8 } },
+  restaurant: { id: 'restaurant', position: { x: 15, z: 15 } }, // central block, off-road
 };
 
 export const LANDMARKS = [
-  { id: 'clock',    label: 'the clock tower',  position: { x: -90, z: -90 }, colorKey: 'system' },
-  { id: 'fountain', label: 'the fountain',     position: { x:  90, z: -90 }, colorKey: 'nav' },
-  { id: 'neon',     label: 'the big neon sign', position: { x:  90, z:  90 }, colorKey: 'decision' },
-  { id: 'park',     label: 'the little park',  position: { x: -90, z:  90 }, colorKey: 'reward' },
+  { id: 'clock',    label: 'the clock tower',  position: { x: -75, z: -105 }, colorKey: 'system' },
+  { id: 'fountain', label: 'the fountain',     position: { x:  75, z: -105 }, colorKey: 'nav' },
+  { id: 'neon',     label: 'the big neon sign', position: { x:  75, z:  105 }, colorKey: 'decision' },
+  { id: 'park',     label: 'the little park',  position: { x: -75, z:  105 }, colorKey: 'reward' },
 ];
 
-// Each house is anchored along the road "in front of" its landmark.
+// Each house sits one block in front of its landmark (same block-centre column).
 export const HOUSES = [
-  { id: 'house-1', landmarkId: 'clock',    position: { x: -90, z: -58 } },
-  { id: 'house-2', landmarkId: 'fountain', position: { x:  90, z: -58 } },
-  { id: 'house-3', landmarkId: 'neon',     position: { x:  90, z:  58 } },
-  { id: 'house-4', landmarkId: 'park',     position: { x: -90, z:  58 } },
+  { id: 'house-1', landmarkId: 'clock',    position: { x: -75, z: -75 } },
+  { id: 'house-2', landmarkId: 'fountain', position: { x:  75, z: -75 } },
+  { id: 'house-3', landmarkId: 'neon',     position: { x:  75, z:  75 } },
+  { id: 'house-4', landmarkId: 'park',     position: { x: -75, z:  75 } },
 ];
 
 // --- Day/night keyframes ----------------------------------------------------

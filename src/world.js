@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { PALETTE, WORLD, LANDMARKS, HOUSES, TUNING,
-  GAS_STATIONS, FOOD_STANDS, TRAFFIC_LIGHT, SPEED_BUMPS } from './config.js';
+  GAS_STATIONS, FOOD_STANDS, TRAFFIC_LIGHT, SPEED_BUMPS, SPAWN } from './config.js';
 
 const C = (hex) => new THREE.Color(hex);
 
@@ -458,6 +458,8 @@ export function buildWorld(scene) {
     ...GAS_STATIONS.map(s => ({ x: s.position.x, z: s.position.z, r: 13 })),
     ...FOOD_STANDS.map(s => ({ x: s.position.x, z: s.position.z, r: 9 })),
     { x: TRAFFIC_LIGHT.position.x, z: TRAFFIC_LIGHT.position.z, r: 10 },
+    { x: SPAWN.foot.x, z: SPAWN.foot.z, r: 8 },
+    { x: SPAWN.bike.x, z: SPAWN.bike.z, r: 8 },
   ];
   const clear = (x, z) => reserved.every(p => Math.hypot(p.x - x, p.z - z) > p.r);
 
@@ -465,33 +467,33 @@ export function buildWorld(scene) {
   const rng = makeRng(20260601);
   const baseHexes = ['#2a2342', '#332a4f', '#241d39', '#3b3160'];
   const step = WORLD.blockSpacing;
+  // one building per block, centred with small jitter and sized to stay clear
+  // of the surrounding roads (block interior half-width ≈ (step-roadWidth)/2).
+  const maxHalf = (step - WORLD.roadWidth) / 2 - 1.5; // ~ 6.75 for 30/12
   for (let bx = -WORLD.half + step / 2; bx < WORLD.half; bx += step) {
     for (let bz = -WORLD.half + step / 2; bz < WORLD.half; bz += step) {
-      // 1-2 buildings per block
-      const count = rng() > .5 ? 2 : 1;
-      for (let i = 0; i < count; i++) {
-        const x = bx + (rng() - .5) * (step - 12);
-        const z = bz + (rng() - .5) * (step - 12);
-        if (!clear(x, z)) continue;
-        const w = 6 + rng() * 6, d = 6 + rng() * 6, h = 8 + rng() * 26;
-        const b = makeBuilding(w, h, d, baseHexes[(rng() * baseHexes.length) | 0], rng);
-        b.position.set(x, 0, z);
-        const rot = Math.floor(rng() * 4);
-        b.rotation.y = rot * Math.PI / 2;
-        scene.add(b);
-        // footprint AABB (w/d swap on 90°/270° rotations)
-        const swap = rot % 2 === 1;
-        addSolid(x, z, (swap ? d : w) / 2 + 0.4, (swap ? w : d) / 2 + 0.4);
-      }
+      const x = bx + (rng() - .5) * 3;
+      const z = bz + (rng() - .5) * 3;
+      if (!clear(x, z)) continue;
+      const half = 3 + rng() * (maxHalf - 3);
+      const w = half * 2, d = (3 + rng() * (maxHalf - 3)) * 2, h = 9 + rng() * 26;
+      const b = makeBuilding(w, h, d, baseHexes[(rng() * baseHexes.length) | 0], rng);
+      b.position.set(x, 0, z);
+      const rot = Math.floor(rng() * 4);
+      b.rotation.y = rot * Math.PI / 2;
+      scene.add(b);
+      const swap = rot % 2 === 1;
+      addSolid(x, z, (swap ? d : w) / 2 + 0.4, (swap ? w : d) / 2 + 0.4);
     }
   }
 
-  // streetlights along road intersections
+  // streetlights at road-intersection corners (just inside the block)
+  const lampOff = WORLD.roadWidth / 2 + 2;
   for (let g = -WORLD.half + step; g < WORLD.half; g += step) {
     for (let h = -WORLD.half + step; h < WORLD.half; h += step) {
-      if (rng() > .5) continue;
+      if (rng() > .45) continue;
       const sl = makeStreetlight();
-      sl.position.set(g + 5, 0, h + 5);
+      sl.position.set(g + lampOff, 0, h + lampOff);
       scene.add(sl);
     }
   }

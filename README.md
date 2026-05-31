@@ -38,8 +38,9 @@ Midday → Dinner → Late-night), shown in the HUD.
   crawl. Pull onto a **gas station** pad to refuel automatically.
 - **Hunger** (gold meter): drains slowly. Low hunger slows you down. **Eat** at the
   restaurant or a food stand (press **E**) to top up — free.
-- **Traffic**: cars drive the grid, **turn at intersections**, **brake for you** and for
-  each other, and **stop at the traffic light** (both approaches). A minor knock **shakes**
+- **Traffic**: cars, **vans, and buses** drive the grid with varied speeds/behavior,
+  **turn at intersections**, **brake for you** and for each other, and **stop at the
+  traffic light** (both approaches). A minor knock **shakes**
   the food (smaller tip); a real **crash destroys** it — ride back for a free remake.
   **Speed bumps** jolt and slow you. Pedestrians **wander** the city.
 

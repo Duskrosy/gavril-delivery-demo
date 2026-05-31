@@ -40,6 +40,72 @@ function makeCar(colorHex) {
   return g;
 }
 
+function makeVan(colorHex) {
+  const g = new THREE.Group();
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 2.0),
+    new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .5, metalness: .2 }));
+  cab.position.set(0, 1.2, 1.6); cab.castShadow = true; g.add(cab);
+  const box = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.2, 3.8),
+    new THREE.MeshStandardMaterial({ color: C('#e7e2f0'), roughness: .6, emissive: C(colorHex), emissiveIntensity: .05 }));
+  box.position.set(0, 1.55, -1.0); box.castShadow = true; g.add(box);
+  const wind = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.7, 0.1), new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .2, metalness: .5 }));
+  wind.position.set(0, 1.5, 2.6); g.add(wind);
+  const headMat = new THREE.MeshStandardMaterial({ color: C('#fff4d6'), emissive: C('#fff0c8'), emissiveIntensity: 1.6 });
+  const tailMat = new THREE.MeshStandardMaterial({ color: C(PALETTE.decision), emissive: C(PALETTE.decision), emissiveIntensity: 1.2 });
+  for (const x of [-0.7, 0.7]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.12), headMat); hl.position.set(x, 1.0, 2.66); g.add(hl);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.12), tailMat); tl.position.set(x, 1.4, -2.92); g.add(tl);
+  }
+  const wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.42, 12);
+  const wheelMat = new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .95 });
+  for (const x of [-1.05, 1.05]) for (const z of [1.6, -1.8]) {
+    const w = new THREE.Mesh(wheelGeo, wheelMat); w.rotation.z = Math.PI / 2; w.position.set(x, 0.6, z); g.add(w);
+  }
+  return g;
+}
+
+function makeBus(colorHex) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.7, 2.7, 8.6),
+    new THREE.MeshStandardMaterial({ color: C(colorHex), roughness: .5, metalness: .25, emissive: C(colorHex), emissiveIntensity: .05 }));
+  body.position.y = 1.9; body.castShadow = true; g.add(body);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.3, 8.0), new THREE.MeshStandardMaterial({ color: C('#15101f'), roughness: .7 }));
+  roof.position.y = 3.4; g.add(roof);
+  // window strips down each side
+  const winMat = new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .2, metalness: .5, emissive: C(PALETTE.nav), emissiveIntensity: .18 });
+  for (const sx of [-1.37, 1.37]) {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 7.0), winMat);
+    strip.position.set(sx, 2.3, -0.3); g.add(strip);
+  }
+  const front = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 0.12), winMat); front.position.set(0, 2.3, 4.35); g.add(front);
+  const headMat = new THREE.MeshStandardMaterial({ color: C('#fff4d6'), emissive: C('#fff0c8'), emissiveIntensity: 1.6 });
+  const tailMat = new THREE.MeshStandardMaterial({ color: C(PALETTE.decision), emissive: C(PALETTE.decision), emissiveIntensity: 1.2 });
+  for (const x of [-0.9, 0.9]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.3, 0.12), headMat); hl.position.set(x, 1.1, 4.36); g.add(hl);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.35, 0.12), tailMat); tl.position.set(x, 1.4, -4.36); g.add(tl);
+  }
+  const wheelGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.45, 12);
+  const wheelMat = new THREE.MeshStandardMaterial({ color: C('#0c0912'), roughness: .95 });
+  for (const x of [-1.2, 1.2]) for (const z of [2.6, -2.4]) {
+    const w = new THREE.Mesh(wheelGeo, wheelMat); w.rotation.z = Math.PI / 2; w.position.set(x, 0.7, z); g.add(w);
+  }
+  return g;
+}
+
+// vehicle types: footprint + behaviour ranges. `weight` biases the mix.
+const VEHICLE_TYPES = [
+  { kind: 'car', make: makeCar, w: 2.0, l: 4.2, weight: 6, speed: [0.9, 1.2], turn: [0.3, 0.5], yield: 4.2, accel: [0.9, 1.3] },
+  { kind: 'van', make: makeVan, w: 2.3, l: 5.8, weight: 3, speed: [0.8, 1.0], turn: [0.2, 0.4], yield: 4.8, accel: [0.8, 1.0] },
+  { kind: 'bus', make: makeBus, w: 2.7, l: 8.6, weight: 2, speed: [0.6, 0.8], turn: [0.08, 0.18], yield: 5.6, accel: [0.6, 0.85] },
+];
+const BUS_COLORS = ['#ffc864', '#6fd2e6', '#ff8ec8'];
+function pickType(r) {
+  const total = VEHICLE_TYPES.reduce((s, t) => s + t.weight, 0);
+  let x = r * total;
+  for (const t of VEHICLE_TYPES) { if ((x -= t.weight) <= 0) return t; }
+  return VEHICLE_TYPES[0];
+}
+
 // world position + heading for a car given its (axis, dir, line, along)
 function carWorld(car) {
   if (car.axis === 'z') {
@@ -81,11 +147,21 @@ export class Traffic {
     let seed = 1337;
     const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
     let i = 0;
+    const lerp = (a, b, t) => a + (b - a) * t;
     while (this.cars.length < TUNING.carCount && i < 400) {
       const line = lines[i % lines.length];
       const axis = (i % 2 === 0) ? 'z' : 'x';
-      const car = { axis, line, dir: rnd() > 0.5 ? 1 : -1, along: (rnd() * 2 - 1) * (WORLD.half - 12),
-        speed: TUNING.carSpeed, _lastTurn: null, mesh: makeCar(CAR_COLORS[this.cars.length % CAR_COLORS.length]) };
+      const type = pickType(rnd());
+      const color = type.kind === 'bus' ? BUS_COLORS[this.cars.length % BUS_COLORS.length] : CAR_COLORS[this.cars.length % CAR_COLORS.length];
+      const car = {
+        axis, line, dir: rnd() > 0.5 ? 1 : -1, along: (rnd() * 2 - 1) * (WORLD.half - 12),
+        speed: 0, kind: type.kind, halfW: type.w / 2, halfL: type.l / 2,
+        speedFactor: lerp(type.speed[0], type.speed[1], rnd()),
+        turnChance: lerp(type.turn[0], type.turn[1], rnd()),
+        yieldDist: type.yield + rnd() * 1.2,
+        accelF: lerp(type.accel[0], type.accel[1], rnd()),
+        _lastTurn: null, mesh: type.make(color),
+      };
       scene.add(car.mesh);
       this.cars.push(car);
     }
@@ -115,17 +191,18 @@ export class Traffic {
 
     for (const car of this.cars) {
       const w = car._w;
-      const px = w.x + w.hvx * T.carLookAhead;
-      const pz = w.z + w.hvz * T.carLookAhead;
-      let target = T.carSpeed;
+      const look = T.carLookAhead + car.halfL; // longer vehicles look further
+      const px = w.x + w.hvx * look;
+      const pz = w.z + w.hvz * look;
+      let target = T.carSpeed * car.speedFactor;
 
       // yield to the player ahead
-      if (playerPos && Math.hypot(playerPos.x - px, playerPos.z - pz) < T.carYieldDist + 1.5) target = 0;
+      if (playerPos && Math.hypot(playerPos.x - px, playerPos.z - pz) < car.yieldDist + 1.5) target = 0;
       // yield to a car ahead
       if (target > 0) {
         for (const o of this.cars) {
           if (o === car) continue;
-          if (Math.hypot(o._w.x - px, o._w.z - pz) < T.carYieldDist) { target = 0; break; }
+          if (Math.hypot(o._w.x - px, o._w.z - pz) < car.yieldDist + o.halfL * 0.5) { target = 0; break; }
         }
       }
       // obey the one traffic light on both its approaches
@@ -142,7 +219,7 @@ export class Traffic {
       }
 
       // accelerate / brake toward target
-      if (car.speed < target) car.speed = Math.min(target, car.speed + T.carAccel * dt);
+      if (car.speed < target) car.speed = Math.min(target, car.speed + T.carAccel * car.accelF * dt);
       else if (car.speed > target) car.speed = Math.max(target, car.speed - T.carBrake * dt);
 
       // advance
@@ -152,7 +229,7 @@ export class Traffic {
       const g = Math.round(car.along / step) * step;
       if (Math.abs(g) < half - 1 && Math.abs(car.along - g) < 1.0 && car._lastTurn !== g && car.speed > 1) {
         car._lastTurn = g;
-        if (Math.random() < T.carTurnChance) {
+        if (Math.random() < car.turnChance) {
           const oldLine = car.line;
           car.axis = car.axis === 'z' ? 'x' : 'z';
           car.line = g;
@@ -172,8 +249,8 @@ export class Traffic {
   // Car footprints as AABBs for solid push-out (oriented to each car's axis).
   solidBoxes() {
     return this.cars.map(c => c.axis === 'z'
-      ? { x: c._wx, z: c._wz, hx: 1.3, hz: 2.3 }
-      : { x: c._wx, z: c._wz, hx: 2.3, hz: 1.3 });
+      ? { x: c._wx, z: c._wz, hx: c.halfW, hz: c.halfL }
+      : { x: c._wx, z: c._wz, hx: c.halfL, hz: c.halfW });
   }
 
   // Strongest car footprint overlapping the body circle (radius r). Overlap-
@@ -181,8 +258,8 @@ export class Traffic {
   collide(body, r = 1.8) {
     let best = null, bestPen = 0;
     for (const car of this.cars) {
-      const hx = car.axis === 'z' ? 1.3 : 2.3;
-      const hz = car.axis === 'z' ? 2.3 : 1.3;
+      const hx = car.axis === 'z' ? car.halfW : car.halfL;
+      const hz = car.axis === 'z' ? car.halfL : car.halfW;
       const dx = body.position.x - car._wx;
       const dz = body.position.z - car._wz;
       const ox = (hx + r) - Math.abs(dx);
