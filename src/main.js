@@ -71,7 +71,13 @@ const serverUrl = new URLSearchParams(location.search).get('server') || MULTIPLA
 const net = new Net(serverUrl);
 const remotePlayers = new RemotePlayers(scene);
 net.connect(
-  (w) => { hud.setMultiplayer(w.name, net.online); hud.toast(`Online · you're ${w.name}`); },
+  (w) => {
+    hud.setMultiplayer(w.name, net.online); hud.toast(`Online · you're ${w.name}`);
+    // server owns the NPCs now — switch to rendering its world
+    if (w.vkinds) traffic.loadKinds(w.vkinds);
+    world.placeHangouts(w.hang);
+    world.setNetworked(true);
+  },
   (reason) => hud.soloToast(reason),
   (m) => remotePlayers.say(m.id, m.text),  // a remote player said something
 );
@@ -428,7 +434,12 @@ function tick() {
   dayNight.update(dt);
   bloom.strength = dayNight.bloom;
   world.update(dt);
-  traffic.update(dt, mount.body.position, mount.isRiding);
+  if (net.hasWorld) {
+    traffic.applyServer(dt, net.veh, net.lit);     // server-owned vehicles + lights
+    world.applyServerAgents(net.ped, net.cou, dt); // server-owned peds + couriers
+  } else {
+    traffic.update(dt, mount.body.position, mount.isRiding);
+  }
 
   pushing = mount.isRiding && needs.engineCut;
   const ctrl = active ? input : noInput;

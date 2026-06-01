@@ -121,6 +121,7 @@ const VEHICLE_TYPES = [
   { kind: 'moto', make: makeMoto, w: 1.0, l: 2.2, weight: 4, speed: [1.0, 1.3], turn: [0.18, 0.32], yield: 3.2, accel: [1.0, 1.5] },
 ];
 const BUS_COLORS = ['#ffc864', '#6fd2e6', '#ff8ec8'];
+const KIND_MAP = Object.fromEntries(VEHICLE_TYPES.map(t => [t.kind, t]));
 function pickType(r) {
   const total = VEHICLE_TYPES.reduce((s, t) => s + t.weight, 0);
   let x = r * total;
@@ -166,6 +167,8 @@ class TrafficLightCtrl {
 
 export class Traffic {
   constructor(scene, lightRefs) {
+    this.scene = scene;
+    this.networked = false;
     const lines = gridLines();
     // every distinct lane (line × axis × direction) so cars don't spawn stacked
     const lanes = [];
@@ -219,6 +222,38 @@ export class Traffic {
       car._w = w; car._wx = w.x; car._wz = w.z;
       car.mesh.position.set(w.x, 0, w.z);
       car.mesh.rotation.y = w.rotY;
+    }
+  }
+
+  // --- networked mode: render server-owned vehicles by index ---------------
+  // Rebuild meshes to match the server's vehicle kinds (called once).
+  loadKinds(vkinds) {
+    for (const c of this.cars) this.scene.remove(c.mesh);
+    this.cars = vkinds.map((kind, idx) => {
+      const t = KIND_MAP[kind] || VEHICLE_TYPES[0];
+      const color = kind === 'bus' ? BUS_COLORS[idx % BUS_COLORS.length] : CAR_COLORS[idx % CAR_COLORS.length];
+      const mesh = t.make(color); this.scene.add(mesh);
+      return { kind, halfW: t.w / 2, halfL: t.l / 2, axis: 'z', line: 0, dir: 1, along: 0, speed: 0, mesh };
+    });
+    this.networked = true;
+  }
+
+  // Apply a server snapshot: veh=[[axisCode,line,dir,along]…], lit=[phaseCode…]
+  applyServer(dt, veh, lit) {
+    if (!veh) return;
+    const k = Math.min(1, dt * 10);
+    for (let i = 0; i < this.cars.length && i < veh.length; i++) {
+      const c = this.cars[i], s = veh[i];
+      c.axis = s[0] === 0 ? 'z' : 'x'; c.line = s[1]; c.dir = s[2];
+      const target = s[3];
+      if (Math.abs(target - c.along) > WORLD.half) c.along = target; // wrapped — snap
+      else c.along += (target - c.along) * k;                        // else smooth
+    }
+    this._place();
+    if (lit) for (let i = 0; i < this.lights.length && i < lit.length; i++) {
+      const r = this.lights[i].refs, ph = lit[i];
+      const set = (m, on) => { if (m) m.emissiveIntensity = on ? 1.8 : 0.04; };
+      set(r.redMat, ph === 2); set(r.yellowMat, ph === 1); set(r.greenMat, ph === 0);
     }
   }
 

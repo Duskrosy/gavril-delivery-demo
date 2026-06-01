@@ -15,6 +15,10 @@ export class Net {
     this.color = null;
     this._snapshot = [];
     this._onWelcome = null;
+    this.vkinds = null;   // vehicle kinds (from welcome)
+    this.hang = null;     // static hangout positions (from welcome)
+    this.veh = null; this.ped = null; this.cou = null; this.lit = null; // per-tick NPC state
+    this.hasWorld = false;
   }
 
   // onWelcome(welcome) fires once we've joined; onFail(reason) fires once if
@@ -46,9 +50,11 @@ export class Net {
         clearTimeout(timer);
         this.joined = true;
         this.selfId = m.id; this.name = m.name; this.color = m.color;
+        this.vkinds = m.vkinds || null; this.hang = m.hang || null;
         this._onWelcome?.(m);
       } else if (m.t === 'players') {
         this._snapshot = m.players || [];
+        if (m.veh) { this.veh = m.veh; this.ped = m.ped; this.cou = m.cou; this.lit = m.lit; this.hasWorld = true; }
       } else if (m.t === 'chat') {
         this._onChat?.(m);
       }

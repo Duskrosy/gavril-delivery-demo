@@ -7,8 +7,10 @@
 
 const http = require('http');
 const { WebSocketServer } = require('ws');
+const { World } = require('./npc.js');
 
 const PORT = process.env.PORT || 8080;
+const world = new World();
 
 const ADJ = ['Swift', 'Neon', 'Midnight', 'Turbo', 'Lunar', 'Crimson', 'Volt', 'Mellow',
   'Rapid', 'Pixel', 'Cosmic', 'Drift', 'Hazy', 'Ember', 'Frost', 'Jade', 'Solar', 'Onyx'];
@@ -39,7 +41,8 @@ wss.on('connection', (ws) => {
   const p = { id: 'p' + (nextId++), name: randomName(), color: randomColor(),
     x: 0, z: 30, yaw: Math.PI, riding: false, carrying: 'none' };
   players.set(ws, p);
-  ws.send(JSON.stringify({ t: 'welcome', id: p.id, name: p.name, color: p.color }));
+  const d = world.descriptors();
+  ws.send(JSON.stringify({ t: 'welcome', id: p.id, name: p.name, color: p.color, vkinds: d.vkinds, hang: d.hang }));
 
   ws.on('message', (data) => {
     try {
@@ -59,14 +62,25 @@ wss.on('connection', (ws) => {
   ws.on('error', () => players.delete(ws));
 });
 
-// broadcast a full snapshot ~15x/sec
+// step the NPC world at a steady rate (independent of broadcast)
+let last = Date.now();
+setInterval(() => {
+  const now = Date.now(); const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  if (players.size === 0) return; // idle when empty
+  const pls = [];
+  for (const p of players.values()) pls.push({ x: p.x, z: p.z });
+  world.step(dt, pls);
+}, 50);
+
+// broadcast players + NPC snapshot ~13x/sec
 setInterval(() => {
   if (players.size === 0) return;
   const arr = [];
   for (const p of players.values()) arr.push({ id: p.id, name: p.name, color: p.color,
     x: p.x, z: p.z, yaw: p.yaw, riding: p.riding, carrying: p.carrying });
-  const msg = JSON.stringify({ t: 'players', players: arr });
+  const snap = world.snapshot();
+  const msg = JSON.stringify({ t: 'players', players: arr, veh: snap.veh, ped: snap.ped, cou: snap.cou, lit: snap.lit });
   for (const ws of players.keys()) if (ws.readyState === 1) ws.send(msg);
-}, 66);
+}, 75);
 
 server.listen(PORT, () => console.log('Gavril MP server listening on :' + PORT));

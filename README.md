@@ -54,8 +54,9 @@ Midday → Dinner → Late-night), shown in the HUD.
   riders** weave the roads and hang out at spots, and **points of interest** — plazas, a
   park, food-truck corners — draw little crowds around the city.
 - **Camera**: Roblox-style orbit — right-drag or **Ctrl shift-lock** to look around, wheel to zoom.
-- **Multiplayer** *(default)*: a tiny single-room relay server (`server/`). Each player
-  gets a **random name + color** and sees everyone else move with name tags. The client
+- **Multiplayer** *(default)*: a single-room server (`server/`). Each player gets a
+  **random name + color**, sees everyone else with name tags + chat, and the **server owns
+  all the NPCs** (traffic, pedestrians, lights) so everyone sees the same world. The client
   connects to `MULTIPLAYER.url` (config.js) by default; if it can't reach the server it
   **falls back to single-player** with a toast explaining why. Override per-link with
   `?server=wss://YOUR-HOST`. See `server/README.md` to run/host it (Render, etc.).

@@ -709,6 +709,7 @@ export function buildWorld(scene) {
   const marker = makeMarker();
   scene.add(marker);
 
+  let networked = false; // when true, peds/couriers are positioned by the server
   let t = 0;
   function update(dt) {
     t += dt;
@@ -723,39 +724,37 @@ export function buildWorld(scene) {
     padMat.opacity = 0.28 + Math.sin(t * 3) * 0.14;
     clockPad.scale.setScalar(1 + Math.sin(t * 3) * 0.04);
 
-    // pedestrians wander: walk forward, turn now and then, reflect at bounds
-    for (const p of peds) {
-      p.turnIn -= dt;
-      if (p.turnIn <= 0) {
-        p.yaw += (Math.random() - 0.5) * Math.PI * 0.9;
-        p.turnIn = pedMin + Math.random() * (pedMax - pedMin);
+    // pedestrians + couriers wander locally ONLY when not server-driven
+    if (!networked) {
+      for (const p of peds) {
+        p.turnIn -= dt;
+        if (p.turnIn <= 0) {
+          p.yaw += (Math.random() - 0.5) * Math.PI * 0.9;
+          p.turnIn = pedMin + Math.random() * (pedMax - pedMin);
+        }
+        p.ped.position.x += Math.sin(p.yaw) * p.speed * dt;
+        p.ped.position.z += Math.cos(p.yaw) * p.speed * dt;
+        if (Math.abs(p.ped.position.x) > PED_LIM || Math.abs(p.ped.position.z) > PED_LIM) {
+          p.yaw += Math.PI;
+          p.ped.position.x = Math.max(-PED_LIM, Math.min(PED_LIM, p.ped.position.x));
+          p.ped.position.z = Math.max(-PED_LIM, Math.min(PED_LIM, p.ped.position.z));
+        }
+        p.ped.rotation.y = p.yaw;
       }
-      const hx = Math.sin(p.yaw), hz = Math.cos(p.yaw);
-      p.ped.position.x += hx * p.speed * dt;
-      p.ped.position.z += hz * p.speed * dt;
-      if (Math.abs(p.ped.position.x) > PED_LIM || Math.abs(p.ped.position.z) > PED_LIM) {
-        p.yaw += Math.PI;
-        p.ped.position.x = Math.max(-PED_LIM, Math.min(PED_LIM, p.ped.position.x));
-        p.ped.position.z = Math.max(-PED_LIM, Math.min(PED_LIM, p.ped.position.z));
+      for (const c of couriers) {
+        c.turnIn -= dt;
+        if (c.turnIn <= 0) { c.yaw += (Math.random() - 0.5) * Math.PI * 0.7; c.turnIn = 2 + Math.random() * 4; }
+        c.obj.position.x += Math.sin(c.yaw) * c.speed * dt;
+        c.obj.position.z += Math.cos(c.yaw) * c.speed * dt;
+        if (Math.abs(c.obj.position.x) > PED_LIM || Math.abs(c.obj.position.z) > PED_LIM) {
+          c.yaw += Math.PI;
+          c.obj.position.x = Math.max(-PED_LIM, Math.min(PED_LIM, c.obj.position.x));
+          c.obj.position.z = Math.max(-PED_LIM, Math.min(PED_LIM, c.obj.position.z));
+        }
+        c.obj.rotation.y = c.yaw;
       }
-      p.ped.rotation.y = p.yaw;
-      p.ped.position.y = Math.abs(Math.sin((t + p.phase) * 6)) * 0.13; // walk bob
     }
-
-    // roaming couriers wander faster, like peds on scooters
-    for (const c of couriers) {
-      c.turnIn -= dt;
-      if (c.turnIn <= 0) { c.yaw += (Math.random() - 0.5) * Math.PI * 0.7; c.turnIn = 2 + Math.random() * 4; }
-      const hx = Math.sin(c.yaw), hz = Math.cos(c.yaw);
-      c.obj.position.x += hx * c.speed * dt;
-      c.obj.position.z += hz * c.speed * dt;
-      if (Math.abs(c.obj.position.x) > PED_LIM || Math.abs(c.obj.position.z) > PED_LIM) {
-        c.yaw += Math.PI;
-        c.obj.position.x = Math.max(-PED_LIM, Math.min(PED_LIM, c.obj.position.x));
-        c.obj.position.z = Math.max(-PED_LIM, Math.min(PED_LIM, c.obj.position.z));
-      }
-      c.obj.rotation.y = c.yaw;
-    }
+    for (const p of peds) p.ped.position.y = Math.abs(Math.sin((t + p.phase) * 6)) * 0.13; // walk bob (always)
 
     // idling couriers sway/bob in place
     for (const h of hangouts) {
@@ -775,6 +774,25 @@ export function buildWorld(scene) {
     trafficLights,
     marker,
     solids,
+    // --- server-driven NPC positioning (multiplayer) ---
+    setNetworked: (v) => { networked = v; },
+    placeHangouts: (hang) => {
+      if (!hang) return;
+      for (let i = 0; i < hangouts.length && i < hang.length; i++) {
+        hangouts[i].obj.position.x = hang[i][0]; hangouts[i].obj.position.z = hang[i][1];
+      }
+    },
+    applyServerAgents: (ped, cou, dt) => {
+      const k = Math.min(1, dt * 10);
+      if (ped) for (let i = 0; i < peds.length && i < ped.length; i++) {
+        const m = peds[i].ped, s = ped[i];
+        m.position.x += (s[0] - m.position.x) * k; m.position.z += (s[1] - m.position.z) * k; m.rotation.y = s[2];
+      }
+      if (cou) for (let i = 0; i < couriers.length && i < cou.length; i++) {
+        const m = couriers[i].obj, s = cou[i];
+        m.position.x += (s[0] - m.position.x) * k; m.position.z += (s[1] - m.position.z) * k; m.rotation.y = s[2];
+      }
+    },
     // moving NPCs (peds + couriers) as small circular solids for collision
     agentSolids: () => {
       const R = TUNING.pedRadius ?? 0.85;

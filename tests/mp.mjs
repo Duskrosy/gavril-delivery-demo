@@ -73,6 +73,24 @@ async function run() {
     d.net.send({ x: d.bike.position.x, z: d.bike.position.z, yaw: d.bike.yaw, riding: true, carrying: 'none' }); });
   await wait(700);
   R.p2SeesBike = await p2.evaluate(() => [...window.__demo.remotePlayers.map.values()].some(e => e.bike && e.bike.visible && !e.walk.visible));
+
+  // NPC sync: both clients render the SAME server-owned world
+  R.p1HasWorld = await p1.evaluate(() => window.__demo.net.hasWorld);
+  R.p2HasWorld = await p2.evaluate(() => window.__demo.net.hasWorld);
+  R.p1Cars = await p1.evaluate(() => window.__demo.traffic.cars.length);
+  const k1 = await p1.evaluate(() => window.__demo.net.vkinds);
+  const k2 = await p2.evaluate(() => window.__demo.net.vkinds);
+  R.vkindsMatch = JSON.stringify(k1) === JSON.stringify(k2);
+  const v1 = await p1.evaluate(() => window.__demo.net.veh.slice(0, 5));
+  const v2 = await p2.evaluate(() => window.__demo.net.veh.slice(0, 5));
+  R.vehSynced = v1.every((c, i) => c[0] === v2[i][0] && c[1] === v2[i][1] && c[2] === v2[i][2] && Math.abs(c[3] - v2[i][3]) < 6);
+  const pd1 = await p1.evaluate(() => window.__demo.net.ped[0]);
+  const pd2 = await p2.evaluate(() => window.__demo.net.ped[0]);
+  R.pedSynced = Math.hypot(pd1[0] - pd2[0], pd1[1] - pd2[1]) < 4;
+  await p1.bringToFront();
+  await p1.evaluate(() => { window.__demo.bike.mesh.position.set(0, 0, 20); window.__demo.setFreeze(true); window.__demo.camera.position.set(0, 70, 70); window.__demo.camera.lookAt(0, 0, 0); });
+  await wait(600);
+  await p1.screenshot({ path: path.join(__dirname, 'mp-npc.png') });
   await p2.evaluate(() => { const r = [...window.__demo.remotePlayers.map.values()][0]; if (r) window.__demo.camera.position.set(r.group.position.x + 14, 10, r.group.position.z + 14), window.__demo.camera.lookAt(r.group.position); window.__demo.setFreeze(true); });
   await wait(200);
   await p2.screenshot({ path: path.join(__dirname, 'mp-chat.png') });
@@ -86,7 +104,9 @@ async function run() {
   console.log('page errors'.padEnd(16), ':', errors.length ? errors : 'none');
   const ok = R.p1connected === true && !!R.p1name && !!R.p2name && R.p1name !== R.p2name &&
     R.p1online === 2 && R.p1remotes === 1 && R.p2remotes === 1 && R.p1meshes === 1 &&
-    R.remoteHasColor === true && R.p1ownBubble === true && R.p2SeesBubble === true && R.p2SeesBike === true && errors.length === 0;
+    R.remoteHasColor === true && R.p1ownBubble === true && R.p2SeesBubble === true && R.p2SeesBike === true &&
+    R.p1HasWorld === true && R.p2HasWorld === true && R.p1Cars === 26 && R.vkindsMatch === true &&
+    R.vehSynced === true && R.pedSynced === true && errors.length === 0;
   console.log('ALL CHECKS PASS'.padEnd(16), ':', ok);
   if (!ok) process.exit(1);
 }
